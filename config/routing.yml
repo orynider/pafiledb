@@ -1,0 +1,15 @@
+orynider_pafiledb_controller:
+    path: /pafiledb
+    defaults: { _controller: orynider.pafiledb.controller:handle_pafiledb }
+orynider_pafiledb_controller_cat:
+    path: /category
+    defaults: { _controller: orynider.pafiledb.controller.cat:handle_category }
+orynider_pafiledb_controller_file:
+    path: /file
+    defaults: { _controller: orynider.pafiledb.controller.file:handle_file }	
+orynider_pafiledb_controller_download:
+    path: /dload
+    defaults: { _controller: orynider.pafiledb.controller.download:handle_download }
+orynider_pafiledb_controller_upload:
+    path: /upload
+    defaults: { _controller: orynider.pafiledb.controller.upload:handle_upload }    

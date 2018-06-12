@@ -1,0 +1,40 @@
+{
+	"name": "orynider/pafiledb",
+	"type": "phpbb-extension",
+	"description": "This extension will add PafileDB Download Manager System to phpBB3, where you can offer your user to download files from your webspace.",
+	"homepage": "http://mxpcms.sourceforge.net",
+	"version": "0.9.0-a",
+	"time": "2018-01-03",
+	"keywords": ["phpbb", "extension", "pafiledb"],
+	"license": "GPL-2.0",
+	"authors": [
+		{
+			"name": "orynider",
+			"homepage": "http://mxpcms.sourceforge.net",
+			"email": "orynider@users.sourceforge.net",
+			"role": "Extension Developer"
+		},
+		{
+			"name": "Mohd Basri, PHP Arena, Jon Ohlsson (jonohlsson@hotmail.com) aka Haplo, dmzx, FlorinCB aka orynider",
+			"homepage": "http://www.samskolan.se/",
+			"role": "Original MOD author"
+		}
+	],
+	"require": {
+		"php": ">=5.3.3"
+	},
+	"require-dev": {
+		"phpbb/epv": "dev-master"
+	},
+	"extra": {
+		"display-name": "PafileDB Download Manager",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.1.0,<3.3.0@dev"
+		},
+		"version-check": {
+			"host": "www.mxpcms.sourceforge.net",
+			"directory": "/versions",
+			"filename": "pafiledb_version.json"
+		}
+	}
+}
