@@ -298,7 +298,7 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 			array('custom', array(array($this, 'insert_sample_data'))),
 
 			// Insert sample pafildb config settings   
-			array('custom', array(array(&$this, 'install_config'))),			
+			array('custom', array(array(&$this, 'install_config'))),
 
 
 			// Add permission
@@ -324,6 +324,14 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 				array(
 					'module_basename' => '\orynider\pafiledb\acp\pafiledb_module',
 					'modes' => array('config', 'categories', 'downloads'),
+				),
+			)),			
+			array('module.add', array(
+				'acp', 
+				'ACP_PA_FILES', 
+				array(
+					'module_basename'	=> '\orynider\pafiledb\acp\ug_auth_manage_module',
+					'modes'	=> array('catauth_manage', 'user', 'group', 'global_user', 'global_group'),					
 				),
 			)),
 		);	

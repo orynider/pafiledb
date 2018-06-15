@@ -126,10 +126,10 @@ class pafiledb_auth
 	 *
 	 * @param unknown_type $c_access
 	 */
-	function auth($c_access)
+	function auth($c_access, $ug_auth_mode = '')
 	{
 		// Read out config values
-		$pafiledb_config = $this->pafiledb_config;
+		$pafiledb_config = $this->config_values();
 		
 		$a_sql = 'a.auth_view, a.auth_read, a.auth_view_file, a.auth_edit_file, a.auth_delete_file, a.auth_upload, a.auth_download, a.auth_rate, a.auth_email, a.auth_view_comment, a.auth_post_comment, a.auth_edit_comment, a.auth_delete_comment, a.auth_mod, a.auth_search, a.auth_stats, a.auth_toplist, a.auth_viewall, a.auth_approval, a.auth_approval_edit';
 		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
@@ -164,11 +164,11 @@ class pafiledb_auth
 				}				
 			}
 		}
-		print_r($row);
+		
 		//$is_admin = ($this->user->data['user_level'] == ADMIN && $this->user->data['session_logged_in']) ? true : 0;
 		$is_admin = $this->is_admin;
 
-		for( $i = 0; $i < count($this->auth_fields); $i++ )
+		for( $i = 0; $i < $fields = count($this->auth_fields); $i++ )
 		{
 			$key = $this->auth_fields[$i];
 
@@ -182,7 +182,7 @@ class pafiledb_auth
 			// and admin automatically have access to an ACL forum, similarly we assume admins meet an
 			// auth requirement of MOD
 
-			for( $k = 0; $k < count( $c_access ); $k++ )
+			for( $k = 0; $k < $cats = count( $c_access ); $k++ )
 			{
 				$value = $c_access[$k][$key];
 				$c_cat_id = $c_access[$k]['cat_id'];
@@ -195,17 +195,17 @@ class pafiledb_auth
 					break;
 
 					case AUTH_REG:
-						$this->auth_user[$c_cat_id][$key] = ( $user->data['is_registered'] ) ? true : 0;
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? true : 0;
 						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Registered_Users'];
 					break;
 
 					case AUTH_ACL:
-						$this->auth_user[$c_cat_id][$key] = ( $user->data['is_registered'] ) ? $this->auth_check_user( AUTH_ACL, $key, $u_access[$c_cat_id], $is_admin ) : 0;		
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? $this->auth_check_user( AUTH_ACL, $key, $u_access[$c_cat_id], $is_admin ) : 0;		
 						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Users_granted_access'];
 					break;
 
 					case AUTH_MOD:
-						$this->auth_user[$c_cat_id][$key] = ( $user->data['is_registered'] ) ? $this->auth_check_user( AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin ) : 0;
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? $this->auth_check_user( AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin ) : 0;
 						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Moderators'];
 					break;
 
@@ -220,11 +220,11 @@ class pafiledb_auth
 				}
 			}
 		}
-
-		for( $k = 0; $k < count( $c_access ); $k++ )
+		
+		for( $k = 0; $k < $cats = count($c_access); $k++ )
 		{
 			$c_cat_id = $c_access[$k]['cat_id'];
-			$this->auth_user[$c_cat_id]['auth_mod'] = ( $this->user->data['is_registered'] ) ? $this->auth_check_user( AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin ) : 0;
+			$this->auth_user[$c_cat_id]['auth_mod'] = ($this->user->data['user_id'] != 1) ? $this->auth_check_user( AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin ) : 0;
 		}
 
 		for( $i = 0; $i < count( $this->auth_fields_global ); $i++ )
@@ -240,17 +240,17 @@ class pafiledb_auth
 				break;
 
 				case AUTH_REG:
-					$this->auth_global[$key] = ( $user->data['is_registered'] ) ? true : 0;
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? true : 0;
 					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Registered_Users'];
 				break;
 
 				case AUTH_ACL:
-					$this->auth_global[$key] = ( $user->data['is_registered'] ) ? $this->global_auth_check_user( AUTH_ACL, $key, $global_u_access, $is_admin ) : 0;
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? $this->global_auth_check_user( AUTH_ACL, $key, $global_u_access, $is_admin ) : 0;
 					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Users_granted_access'];
 				break;
 
 				case AUTH_MOD:
-					$this->auth_global[$key] = ( $user->data['is_registered'] ) ? $this->global_auth_check_user( AUTH_MOD, 'auth_mod', $global_u_access, $is_admin ) : 0;
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? $this->global_auth_check_user( AUTH_MOD, 'auth_mod', $global_u_access, $is_admin ) : 0;
 					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Moderators'];
 				break;
 
@@ -264,6 +264,21 @@ class pafiledb_auth
 				break;
 			}
 		}
+		
+		switch ($ug_auth_mode)
+		{
+			case 'global':
+				return $this->auth_global;
+			break;
+			
+			case 'user':
+				return $this->auth_user;
+			break;
+			
+			default:
+
+			break;
+		}		
 	}
 
 	/**
@@ -275,29 +290,30 @@ class pafiledb_auth
 	 * @param unknown_type $is_admin
 	 * @return unknown
 	 */
-	function auth_check_user( $type, $key, $u_access, $is_admin )
+	function auth_check_user($type, $key, $u_access, $is_admin)
 	{
 		$this->auth_user = 0;
-
-		if ( count( $u_access ) )
+print_r($u_access);
+		if ($count = count($u_access))
 		{
-			for( $j = 0; $j < count( $u_access ); $j++ )
+			for( $j = 0; $j < $count; $j++ )
 			{
 				$result = 0;
-				switch ( $type )
+				switch ($type)
 				{
 					case AUTH_ACL:
 						$result = $u_access[$j][$key];
 
 					case AUTH_MOD:
-						$result = $result || $u_access[$j]['auth_mod'];
+						$result = $u_access[$j]['auth_mod'];
 
 					case AUTH_ADMIN:
-						$result = $result || $is_admin;
+						$result = $is_admin;
 					break;
 				}
 
-				$this->auth_user = $this->auth_user || $result;
+				$this->auth_user = $result;
+				
 			}
 		}
 		else

@@ -1,4 +1,5 @@
 <!-- INCLUDE overall_header.html -->
+<!-- INCLUDE pa_header.html -->
 
 <!-- IF S_NO_FILES -->
 <br /><br />
@@ -37,15 +38,19 @@
 						<!-- ENDIF -->
 						<tr class="<!-- IF files_row.S_ROW_COUNT is even --> bg1<!-- ELSE -->bg2<!-- ENDIF -->">
 							<td class="row1 files-title" align="center" valign="middle">
-							<a href="{file_rows.U_FILE}" class="topictitle ask target-block_{BLOCK_ID}">
-							<img src="{file_rows.PIN_IMAGE}" border="0" /><b>{files_row.FILE_TITLE}</b>
+							<a href="{files_row.U_FILE}" class="topictitle ask target-block_{files_row.BLOCK_ID}">
+							<img src="{files_row.PIN_IMAGE}" border="0" /><b>{files_row.FILE_TITLE}</b>
 							</a>
 							</td>
 							<td class="files-version" style="text-align:center;">{files_row.FILE_VERSION}</td>
-							<td class="files-desc" style="text-align:center;">{files_row.FILE_DESC}
-							<hr />
-							<span class="small"><i>{L_FILES_UPLOADED_ON}{L_COLON} {files_row.FILE_UPLOAD_TIME}<br />
-							{L_FILES_LAST_CHANGED_ON}{L_COLON} {files_row.FILE_LAST_CHANGED}</i></span></td>
+							<td class="files-desc" style="text-align:center;">
+								{files_row.FILE_DESC}
+								<hr />
+								<span class="small">
+								<i>{L_FILES_UPLOADED_ON}{L_COLON}{files_row.FILE_UPLOAD_TIME}<br />
+								{L_FILES_LAST_CHANGED_ON}{L_COLON}{files_row.FILE_LAST_CHANGED}</i>
+								</span>
+							</td>
 							<td class="files-count" style="text-align:center;"><strong>{files_row.FILE_CLICKS}</strong></td>
 							<td class="files-file_size" style="text-align:center;">{files_row.FILESIZE}</td>
 							<td class="files-dl" style="text-align:center;">{files_row.U_DOWNLOAD}</td>
@@ -71,4 +76,4 @@
 </div>
 <!-- ENDIF -->
 
-<!-- INCLUDE overall_footer.html -->
+<!-- INCLUDE pa_footer.html -->

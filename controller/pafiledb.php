@@ -34,12 +34,12 @@ class pafiledb
 	/**
 	* Constructor
 	*
-	* @param \orynider\pafiledb\core\functions		$functions
-	* @param \phpbb\template\template		 			$template
+	* @param \orynider\pafiledb\core\functions					$functions
+	* @param \phpbb\template\template		 				$template
 	* @param \phpbb\user								$user
 	* @param \phpbb\auth\auth							$auth
 	* @param \phpbb\request\request		 				$request
-	* @param \phpbb\controller\helper					$helper
+	* @param \phpbb\controller\helper						$helper
 	*
 	*/
 	public function __construct(

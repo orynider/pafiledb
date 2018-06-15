@@ -121,3 +121,4 @@ class pafiledb_module
 		}
 	}
 }
+?>

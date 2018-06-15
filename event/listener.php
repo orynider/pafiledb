@@ -90,6 +90,7 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars(array(
 			'U_PA_FILES'				=> $this->helper->route('orynider_pafiledb_controller'),
 			'U_PA_FILES_UPLOAD'			=> $this->helper->route('orynider_pafiledb_controller_upload'),
+			'U_PA_FILES_FILE'			=> $this->helper->route('orynider_pafiledb_controller_file'),			
 			'PA_FILES_USE_UPLOAD'		=> $this->auth->acl_get('u_pa_files_upload'),			
 			'S_FILES_EXIST'				=> true,
 			'PAFILEDB_VERSION'			=> $this->config['pa_module_version'],
@@ -104,7 +105,13 @@ class listener implements EventSubscriberInterface
 			$event['location'] = $this->user->lang('FILES_DOWNLOADS');
 			$event['location_url'] = $this->helper->route('orynider_pafiledb_controller', array('name' => 'index'));
 		}
-
+		
+		if (strrpos($event['row']['session_page'], 'app.' . $this->php_ext . '/file') === 0)
+		{
+			$event['location'] = $this->user->lang('FILES_DOWNLOAD_SECTION');
+			$event['location_url'] = $this->helper->route('orynider_pafiledb_controller_file', array('name' => 'index'));
+		}
+		
 		if (strrpos($event['row']['session_page'], 'app.' . $this->php_ext . '/upload') === 0)
 		{
 			$event['location'] = $this->user->lang('FILES_UPLOAD_SECTION');
@@ -116,20 +123,24 @@ class listener implements EventSubscriberInterface
 	{
 		$event['permissions'] = array_merge($event['permissions'], array(
 			'u_pa_files_use'	=> array(
-				'lang'		=> 'ACL_U_PA_FILES_USE',
-				'cat'		=> 'Download Manager'
+				'lang'				=> 'ACL_U_PA_FILES_USE',
+				'cat'				=> 'Download Manager'
 			),
 			'u_pa_files_download'	=> array(
-				'lang'		=> 'ACL_U_PA_FILES_DOWNLOAD',
-				'cat'		=> 'Download Manager'
+				'lang'				=> 'ACL_U_PA_FILES_DOWNLOAD',
+				'cat'				=> 'Download Manager'
 			),
+			'u_pa_files_file'	=> array(
+				'lang'				=> 'ACL_U_PA_FILES_FILE',
+				'cat'				=> 'Download Manager'
+			),			
 			'u_pa_files_upload'	=> array(
-				'lang'		=> 'ACL_U_PA_FILES_UPLOAD',
-				'cat'		=> 'Download Manager'
+				'lang'				=> 'ACL_U_PA_FILES_UPLOAD',
+				'cat'				=> 'Download Manager'
 			),
 			'a_pa_files'		=> array(
-				'lang'		=> 'ACL_U_PA_FILES_USE',
-				'cat'		=> 'Download Manager'
+				'lang'				=> 'ACL_U_PA_FILES_USE',
+				'cat'				=> 'Download Manager'
 			),
 		));
 		$event['categories'] = array_merge($event['categories'], array(

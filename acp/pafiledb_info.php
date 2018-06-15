@@ -14,7 +14,7 @@ class pafiledb_info
 	function module()
 	{
 		return array(
-			'filename'		=> 'acp_pa_files',
+			'filename'		=> 'orynider\pafiledb\acp\pafiledb_module',
 			'title'			=> 'ACP_PA_FILES',
 			'modes'			=> array(
 				'config'		=> array('title' => 'ACP_MANAGE_CONFIG', 'auth' => 'ext_orynider/pafiledb && acl_a_pa_files', 'cat' => array('ACP_PA_FILES')),

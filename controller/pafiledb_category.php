@@ -133,6 +133,8 @@ class pafiledb_category
 		$board_url = generate_board_url() . '/';
 		define('ICONS_DIR', 'styles/all/images/icons/');		
 		
+		$images = $this->templates->images;
+		
 		//		
 		// Read out config values
 		//		
@@ -188,10 +190,10 @@ class pafiledb_category
 			{
 				case 'ASC':
 					$sort_order = 'ASC';
-					break;
+				break;
 				case 'DESC':
 					$sort_order = 'DESC';
-					break;
+				break;
 				default:
 					$sort_order = $pafiledb_config['sort_order'];
 			}
@@ -206,11 +208,11 @@ class pafiledb_category
 		// or the user is not allowed to view these category we gave him a nice message.
 		// =======================================================
 		$show_category = false;
-		if ( isset( $this->subcat_rowset[$cat_id] ) )
+		if ( isset( $this->functions->subcat_rowset[$cat_id] ) )
 		{
-			foreach( $this->subcat_rowset[$cat_id] as $sub_cat_id => $sub_cat_row )
+			foreach( $this->functions->subcat_rowset[$cat_id] as $sub_cat_id => $sub_cat_row )
 			{
-				if ( $this->auth_user[$sub_cat_id]['auth_view'] )
+				if ( $this->functions->auth_user[$sub_cat_id]['auth_view'] )
 				{
 					$show_category = true;
 					break;
@@ -218,14 +220,14 @@ class pafiledb_category
 			}
 		}
 
-		if ( !isset( $this->cat_rowset[$cat_id] ) )
+		if ( !isset( $this->functions->cat_rowset[$cat_id] ) )
 		{
-			$this->functions->message_die(GENERAL_MESSAGE, $this->user->lang('Cat_not_exist'));
+			//print_r($this->functions->cat_rowset);
+			//$this->functions->message_die(GENERAL_MESSAGE, $this->user->lang('Cat_not_exist'));
 		}		
 		
 		//
 		// User authorisation levels output
-		//
 		$this->functions->auth_can($cat_id);		
 		
 		/**
@@ -263,14 +265,31 @@ class pafiledb_category
 		$this->db->sql_freeresult($result);
 
 		// Select cat name
-		$sql = 'SELECT cat_name
-			FROM ' . $this->pa_cat_table. '
-			WHERE cat_id = ' . (int) $cat_id;
-		$result = $this->db->sql_query($sql);
-		$row = $this->db->sql_fetchrow($result);
-		$cat_name = $row['cat_name'];
+		$sql = 'SELECT bc.*, bd.*, COUNT(bd.file_id) AS number_downloads, MAX(bd.file_update_time) AS last_download
+			FROM ' . $this->pa_cat_table . ' bc
+			LEFT JOIN ' . $this->pa_cat_table . ' bc2
+				ON ( bc2.left_id < bc.right_id
+					AND bc2.left_id > bc.left_id
+					AND bc2.cat_id = ' . (int) $cat_id . ' )
+			LEFT JOIN ' . $this->pa_files_table . ' bd
+				ON ( bd.file_catid = bc.cat_id
+				OR bd.file_catid = bc2.cat_id	)
+			WHERE bc.cat_parent = ' . (int) $cat_id . '
+			GROUP BY bc.cat_id
+			ORDER BY bc.left_id ASC';
+		if ( !($result = $this->db->sql_query_limit($sql, $pafiledb_config['pagination_downloads'], $start, 60)) )
+		{
+			$this->functions->message_die(GENERAL_ERROR, 'Could not query category information', '', __LINE__, __FILE__, $sql);
+		}	
+		
+		$new_topic_data = array();
+		while( $topic_data = $this->db->sql_fetchrow($result) )
+		{
+			$cat_name = $topic_data['cat_name'];
+			$new_topic_data[$topic_data['cat_id']][$topic_data['file_id']] = $topic_data['file_update_time'];
+		}
 		$this->db->sql_freeresult($result);
-
+		
 		/* Define the tokens from the symbol table, just in case are not compiled in PHP5  */
 		if(!defined('T_CONCAT_EQUAL'))
 		{
@@ -290,6 +309,46 @@ class pafiledb_category
 			@define('T_COMMENT', 374);
 			@define('T_DOC_COMMENT', 375);				
 		}		
+	
+		$unread_topics = false;
+		if ($this->user->data['user_id'] != 1)
+		{
+			if ( !empty($new_topic_data[$cat_id]) )
+			{
+				$forum_last_post_time = 0;
+					
+				while( list($check_topic_id, $check_post_time) = @each($new_topic_data[$cat_id]) )
+				{
+					if ( empty($tracking_topics[$check_topic_id]) )
+					{
+						$unread_topics = true;
+						$forum_last_post_time = max($check_post_time, $forum_last_post_time);
+					}
+					else
+					{
+						if ( $tracking_topics[$check_topic_id] < $check_post_time )
+						{
+							$unread_topics = true;
+							$forum_last_post_time = max($check_post_time, $forum_last_post_time);
+						}
+					}
+				}
+					
+				if ( !empty($tracking_forums[$cat_id]) )
+				{
+					if ( $tracking_forums[$cat_id] > $forum_last_post_time )
+					{
+						$unread_topics = false;
+					}
+				}
+			}
+		}
+		
+		$pa_folder_image = (($topic_data['left_id'] + 1) != $topic_data['right_id']) ? 'pa_icon_subfolder' : 'pa_icon_folder';
+		$pa_folder_title = (($topic_data['left_id'] + 1) != $topic_data['right_id']) ? $this->user->lang['SUBFORUM'] : $this->user->lang['FOLDER'];
+		
+		$folder_image = isset($unread_topics) ? $images['forum_new'] : $images['forum']; 
+		$folder_title = isset($unread_topics) ? $lang['New_posts'] : $lang['No_new_posts'];		
 		
 		// Check if there are downloads
 		if ($total_downloads == 0)
@@ -298,50 +357,44 @@ class pafiledb_category
 				'CAT_NAME'		=> $cat_name,
 				'S_NO_FILES'	=> true,
 				'MAIN_LINK'		=> $this->helper->route('orynider_pafiledb_controller'),
-				'U_BACK'		=> append_sid("{$this->root_path}index.$this->php_ext"),
+				'U_BACK'		=> append_sid("{$this->root_path}index.{$this->php_ext}"),
 			));
 		}
 		else
-		{
+		{			
+			//
+			// Main query
+			//
+			switch ( SQL_LAYER )
+			{
+				case 'oracle':
+					$sql = "SELECT f1.*, f1.file_id, r.votes_file, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, u.user_colour
+						FROM " . $this->pa_files_table . " AS f1, " . $this->pa_votes_table . " AS r, " . USERS_TABLE . " AS u, " . $this->pa_cat_table . " AS cat
+						WHERE f1.file_id = r.votes_file(+)
+						AND f1.user_id = u.user_id(+)
+						AND f1.file_pin <> " . FILE_PINNED . "
+						AND f1.file_approved = 1
+						AND f1.file_catid = cat.cat_id
+						$cat_where
+						$sql_xtra
+						GROUP BY f1.file_id
+						ORDER BY $sort_method $sort_order";
+					break;
 
-			
-			
-			
-		//
-		// Main query
-		//
-		switch ( SQL_LAYER )
-		{
-			case 'oracle':
-				$sql = "SELECT f1.*, f1.file_id, r.votes_file, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, u.user_colour
-					FROM " . $this->pa_files_table . " AS f1, " . $this->pa_votes_table . " AS r, " . USERS_TABLE . " AS u, " . $this->pa_cat_table . " AS cat
-					WHERE f1.file_id = r.votes_file(+)
-					AND f1.user_id = u.user_id(+)
-					AND f1.file_pin <> " . FILE_PINNED . "
-					AND f1.file_approved = 1
-					AND f1.file_catid = cat.cat_id
-					$cat_where
-					$sql_xtra
-					GROUP BY f1.file_id
-					ORDER BY $sort_method $sort_order";
-				break;
-
-			default:
-				$sql = "SELECT f1.*, f1.file_id, r.votes_file, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, u.user_colour
-					FROM " . $this->pa_files_table . " AS f1
-						LEFT JOIN " . $this->pa_votes_table . " AS r ON f1.file_id = r.votes_file
-						LEFT JOIN " . USERS_TABLE . " AS u ON f1.user_id = u.user_id
-						LEFT JOIN " . $this->pa_category_table . " AS cat ON f1.file_catid = cat.cat_id
-					WHERE f1.file_pin <> " . FILE_PINNED . "
-					AND f1.file_approved = 1
-					$cat_where
-					$sql_xtra
-					GROUP BY f1.file_id
-					ORDER BY $sort_method $sort_order";
-				break;
-		}			
-			
-		
+				default:
+					$sql = "SELECT f1.*, f1.file_id, r.votes_file, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, u.user_colour
+						FROM " . $this->pa_files_table . " AS f1
+							LEFT JOIN " . $this->pa_votes_table . " AS r ON f1.file_id = r.votes_file
+							LEFT JOIN " . USERS_TABLE . " AS u ON f1.user_id = u.user_id
+							LEFT JOIN " . $this->pa_category_table . " AS cat ON f1.file_catid = cat.cat_id
+						WHERE f1.file_pin <> " . FILE_PINNED . "
+						AND f1.file_approved = 1
+						$cat_where
+						$sql_xtra
+						GROUP BY f1.file_id
+						ORDER BY $sort_method $sort_order";
+					break;
+			}				
 			
 			$sql = 'SELECT f1.*, cat.*
 				FROM ' . $this->pa_files_table . ' f1
@@ -371,22 +424,22 @@ class pafiledb_category
 				{
 					if ( $row['file_posticon'] == 'none' || $row['file_posticon'] == 'pa_no_posticon' || $row['file_posticon'] == 'none.gif' )
 					{
-						$posticon = $this->templates->img('pa_no_posticon', $this->user->lang['FILES_POSTICON'], false, '', 'full_tag');
+						$posticon = $this->templates->img('pa_no_posticon', $this->user->lang['FILES_POSTICON'], false, '', 'src');
 					}
 					else
 					{
-						$posticon = $module_root_path . ICONS_DIR . $row['file_posticon'];
+						$posticon = empty($row['file_posticon']) ? $this->templates->img($pa_folder_image, '', false, '', 'src') : $this->module_root_path . ICONS_DIR . $row['file_posticon'];
 					}
 				}
 				else
 				{
-					$posticon = $this->user->img('sticky_read', '', false, '', 'src');
+					$posticon = $this->templates->img('sticky_read', '', false, '', 'src');
 				}				
 				
 				//
 				// Define the little post icon
 				//
-				if ( $this->user->data['user_id'] == ANONYMOUS && $row['post_time'] > $userdata['user_lastvisit'] && $row['post_time'] > $topic_last_read )
+				if ( $this->user->data['user_id'] == ANONYMOUS && $row['post_time'] > $this->user->data['user_lastvisit'] && $row['post_time'] > $topic_last_read )
 				{
 					$mini_post_img = $this->templates->img('icon_pa_new', '', false, '', 'src');
 					$mini_post_alt = $lang['New_post'];
@@ -400,7 +453,8 @@ class pafiledb_category
 				}
 								
 				$download_url = $this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id));								
-								
+				$file_url = $this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id));				
+				
 				if ($this->auth->acl_get('u_pa_files_download'))
 				{
 					$download_tag = '<a href="' . $download_url . '">' . $this->templates->img('pa_icon_mini_dl', $this->user->lang['FILES_REGULAR_DOWNLOAD'], '13', '', 'full_tag') . '</a>';					
@@ -410,7 +464,7 @@ class pafiledb_category
 					$download_tag = $this->templates->img('pa_files_no_download', $this->user->lang['FILES_NO_PERMISSION'], false, '', 'full_tag');
 				}								
  				
-				$dl_title_url = '<a href="' . $download_url . '">' . $dl_title . '</a>';; 
+				$dl_title_url = '<a href="' . $board_url . $download_url . '">' . $dl_title . '</a>';; 
 				
 				$this->message_parser->message = $row['file_desc'];
 				$this->message_parser->bbcode_bitfield = $row['bbcode_bitfield'];
@@ -419,7 +473,7 @@ class pafiledb_category
 				$this->message_parser->format_display($allow_bbcode, $allow_magic_url, $allow_smilies);
 
 				$this->template->assign_block_vars('files_row', array(				
-					// 'U_FILE'			=> $this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$row['file_id'])),					
+					'U_FILE'			=> print_r($file_url, true),					
 					'PIN_IMAGE' 		=> $posticon,					
 					'FILE_TITLE'		=> $file_name,
 					'FILE_VERSION'		=> $file_version,

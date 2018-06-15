@@ -8,16 +8,20 @@
 *
 */
 
-
+namespace orynider\pafiledb\controller;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Enter description here...
  *
  */
-class pafiledb_file extends pafiledb_public
+class pafiledb_file
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
+	
+	/** @var \orynider\pafiledb\core\custom_field */	
+	protected $custom_field;
 
 	/** @var \phpbb\template\template */
 	protected $template;
@@ -79,16 +83,16 @@ class pafiledb_file extends pafiledb_public
 	* Constructor
 	*
 	* @param \orynider\pafiledb\core\functions			$functions
-	
-	
-	* @param \phpbb\template\template		 		$this->template
+	* @param \orynider\pafiledb\core\pafiledb_templates	$pafiledb_templates	
+	* @param \phpbb\cache\service					$cache
+	* @param \orynider\pafiledb\core\pafiledb_cache		$pafiledb_cache
+	* @param \orynider\pafiledb\core\custom_field		$custom_field	
+	* @param \phpbb\template\template		 		$template
 	* @param \phpbb\user						$user
 	* @param \phpbb\auth\auth					$auth
-	* @param \phpbb\db\driver\driver_interface		$this->db
+	* @param \phpbb\db\driver\driver_interface		$db
 	* @param \phpbb\request\request		 		$request
 	* @param \phpbb\controller\helper		 		$helper
-	* @param \phpbb\cache\service					$cache
-	* @param \orynider\pafiledb\core\functions_cache		$functions_cache
 	* @param \phpbb\config\config					$config
 	* @param ContainerInterface                    			$container
 	* @param \phpbb\pagination					$pagination
@@ -108,10 +112,11 @@ class pafiledb_file extends pafiledb_public
 		\orynider\pafiledb\core\pafiledb_templates $pafiledb_templates,
 		\phpbb\cache\driver\driver_interface $cache,
 		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,
-		\phpbb\template\template $this->template,
+		\orynider\pafiledb\core\custom_field $custom_field,		
+		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\auth\auth $auth,
-		\phpbb\db\driver\driver_interface $this->db,
+		\phpbb\db\driver\driver_interface $db,
 		\phpbb\request\request $request,
 		\phpbb\controller\helper $helper,
 		\phpbb\pagination $pagination,
@@ -130,10 +135,11 @@ class pafiledb_file extends pafiledb_public
 		$this->functions 			= $functions;
 		$this->templates 			= $pafiledb_templates;
 		$this->pafiledb 			= $pafiledb_cache;
+		$this->custom_field 		= $custom_field;		
 		$this->template 			= $template;
 		$this->user 				= $user;
 		$this->auth 				= $auth;
-		$this->db 					= $this->db;
+		$this->db 					= $db;
 		$this->request 				= $request;
 		$this->helper 				= $helper;
 		$this->pagination 			= $pagination;
@@ -163,24 +169,27 @@ class pafiledb_file extends pafiledb_public
 	 *
 	 * @param unknown_type $action
 	 */
-	function main( $action  = false )
-	{
+	function handle_file($action  = false)
+	{				
 		// Read out config values
 		$pafiledb_config = $this->functions->config_values();
+		$this->backend = $this->functions->confirm_backend();
 		
+		$memberlist = ($this->backend !== 'phpbb2') ? 'memberlist' : 'memberlist';	
 		$images = $this->templates->images;
 		$is_block = false;
 
 		// =======================================================
 		// Request vars
 		// =======================================================
-		$start = $this->request->get('start', MX_TYPE_INT, 0);
-		$file_id = $this->request->request('file_id', MX_TYPE_INT, '');
-		$page_num = $this->request->request('page_num', MX_TYPE_INT, 1) - 1;
+		$start = $this->request->variable('start', 0);
+		$file_id = $this->request->variable('file_id', 0, true);
+		$page_num = $this->request->variable('page_num', 1) - 1;
 
-		if ( empty( $file_id ) )
+		if (empty($file_id))
 		{
-			$this->functions->message_die( GENERAL_MESSAGE, $this->user->lang['File_not_exist'] );
+			$this->functions->message_die(GENERAL_MESSAGE, $this->user->lang['FILES_NO_ID']);
+			//throw new http_exception(400, 'FILES_NO_ID');
 		}
 
 		// =======================================================
@@ -189,7 +198,7 @@ class pafiledb_file extends pafiledb_public
 		{
 			case 'oracle':
 				$sql = "SELECT f.*, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, COUNT(c.comments_id) as total_comments, cat.cat_allow_ratings, cat.cat_allow_comments
-					FROM " . PA_FILES_TABLE . " AS f, " . PA_VOTES_TABLE . " AS r, " . USERS_TABLE . " AS u, " . PA_COMMENTS_TABLE . " AS c, " . PA_CATEGORY_TABLE . " AS cat
+					FROM " . $this->pa_files_table . " AS f, " . $this->pa_votes_table . " AS r, " . USERS_TABLE . " AS u, " . $this->pa_comments_table . " AS c, " . $this->pa_category_table . " AS cat
 					WHERE f.file_id = r.votes_file(+)
 					AND f.user_id = u.user_id(+)
 					AND f.file_id = c.file_id(+)
@@ -201,51 +210,63 @@ class pafiledb_file extends pafiledb_public
 
 			default:
 				$sql = "SELECT f.*, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, COUNT(c.comments_id) as total_comments, cat.cat_allow_ratings, cat.cat_allow_comments
-					FROM " . PA_FILES_TABLE . " AS f
-						LEFT JOIN " . PA_VOTES_TABLE . " AS r ON f.file_id = r.votes_file
+					FROM " . $this->pa_files_table . " AS f
+						LEFT JOIN " . $this->pa_votes_table . " AS r ON f.file_id = r.votes_file
 						LEFT JOIN " . USERS_TABLE . " AS u ON f.user_id = u.user_id
-						LEFT JOIN " . PA_COMMENTS_TABLE . " AS c ON f.file_id = c.file_id
-						LEFT JOIN " . PA_CATEGORY_TABLE . " AS cat ON f.file_catid = cat.cat_id
+						LEFT JOIN " . $this->pa_comments_table . " AS c ON f.file_id = c.file_id
+						LEFT JOIN " . $this->pa_cat_table . " AS cat ON f.file_catid = cat.cat_id
 					WHERE f.file_id = $file_id
 					AND f.file_approved = 1
 					GROUP BY f.file_id ";
 				break;
 		}
 
-		if ( !( $result = $this->db->sql_query( $sql ) ) )
+		if ( !( $result = $this->db->sql_query($sql) ) )
 		{
 			$this->functions->message_die( GENERAL_ERROR, 'Couldnt Query file info', '', __LINE__, __FILE__, $sql );
 		}
-
+		
+		if (!$this->auth->acl_get('u_pa_files_download'))
+		{
+			throw new http_exception(401, 'FILES_NO_DOWNLOAD');
+		}
+		
 		// ===================================================
 		// file doesn't exist'
 		// ===================================================
-		if ( !$file_data = $this->db->sql_fetchrow( $result ) )
+		if ( !$file_data = $this->db->sql_fetchrow($result) )
 		{
-			$this->functions->message_die( GENERAL_MESSAGE, $this->user->lang['File_not_exist'] );
+			$this->functions->message_die(GENERAL_MESSAGE, $this->user->lang['File_not_exist']);
+			//throw new http_exception(400, 'FILES_DL_NOEXISTS');			
 		}
-		$this->db->sql_freeresult( $result );
+		$this->db->sql_freeresult($result);
 
 		// ===================================================
 		// Pafiledb auth for viewing file
 		// ===================================================
-		if ( ( !$this->auth_user[$file_data['file_catid']]['auth_view_file'] ) )
+		if ((!$this->auth->acl_get('u_pa_files_download') && !$this->functions->auth_user[$file_data['file_catid']]['auth_view_file'] ) )
 		{
-			/*
-			if ( !$this->user->data['session_logged_in'] )
-			{
-				mx_redirect(mx_append_sid($this->root_path . "login.$this->php_ext?redirect=".$this->this_mxurl("action=file&file_id=" . $file_id), true));
-			}
-			*/
-			$message = sprintf( $this->user->lang['Sorry_auth_view'], $this->auth_user[$file_data['file_catid']]['auth_view_file_type'] );
+			//if ( !$this->user->data['session_logged_in'] )
+			//{
+			//	mx_redirect(mx_append_sid($this->root_path . "login.$this->php_ext?redirect=".$this->this_mxurl("action=file&file_id=" . $file_id), true));
+			//}
+			
+			$message = sprintf( $this->user->lang['Sorry_auth_view'], $this->functions->auth_user[$file_data['file_catid']]['auth_view_file_type'] );
 			$this->functions->message_die( GENERAL_MESSAGE, $message );
 		}
-
+		
+		$cat_data = $this->functions->get_cat_info($file_data['file_catid']);
+		
+		/**
+		* Generate the navigation
+		*/
+		$this->functions->generate_cat_nav($cat_data);
+		
 		$this->template->assign_vars( array(
 			'L_INDEX' => "<<",
 
 			'U_INDEX' => append_sid( $this->root_path . 'index.' . $this->php_ext ),
-			'U_DOWNLOAD_HOME' => append_sid( $this->this_mxurl() ),
+			'U_DOWNLOAD_HOME' => append_sid( $this->functions->mxurl() ),
 
 			'FILE_NAME' => $file_data['file_name'],
 			'DOWNLOAD' => $pafiledb_config['module_name']
@@ -254,17 +275,17 @@ class pafiledb_file extends pafiledb_public
 		// ===================================================
 		// Prepare file info to display them
 		// ===================================================
-		$file_time = phpBB2::create_date( $this->config['default_dateformat'], $file_data['file_time'], $this->config['board_timezone'] );
-		$file_last_download = ( $file_data['file_last'] ) ? phpBB2::create_date( $this->config['default_dateformat'], $file_data['file_last'], $this->config['board_timezone'] ) : $this->user->lang['never'];
-		$file_update_time = ( $file_data['file_update_time'] ) ? phpBB2::create_date( $this->config['default_dateformat'], $file_data['file_update_time'], $this->config['board_timezone'] ) : $this->user->lang['never'];
+		$file_time = $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_time'], $this->config['board_timezone'] );
+		$file_last_download = ( $file_data['file_last'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_last'], $this->config['board_timezone'] ) : $this->user->lang['never'];
+		$file_update_time = ( $file_data['file_update_time'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_update_time'], $this->config['board_timezone'] ) : $this->user->lang['never'];
 		$file_author = trim( $file_data['file_creator'] );
 		$file_version = trim( $file_data['file_version'] );
 		$file_screenshot_url = trim( $file_data['file_ssurl'] );
 		$file_website_url = trim( $file_data['file_docsurl'] );
-		$file_download_link = ( $file_data['file_license'] > 0 ) ? mx_append_sid( $this->this_mxurl( 'action=license&license_id=' . $file_data['file_license'] . '&file_id=' . $file_id ) ) : mx_append_sid( $this->this_mxurl( 'action=download&file_id=' . $file_id, 1 ) );
+		$file_download_link = ( $file_data['file_license'] > 0 ) ? append_sid($this->helper->route('orynider_pafiledb_controller_license', array('license_id' =>	$file_data['file_license'], 'file_id' =>	$file_id )) ) : append_sid($this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id)));
 		$file_size = $this->functions->get_file_size( $file_id, $file_data );
 
-		$file_poster = ( $file_data['user_id'] != ANONYMOUS ) ? '<a href="' . mx_append_sid( $this->root_path . 'profile.' . $this->php_ext . '?mode=viewprofile&amp;' . POST_USERS_URL . '=' . $file_data['user_id'] ) . '">' : '';
+		$file_poster = ( $file_data['user_id'] != ANONYMOUS ) ? '<a href="' . append_sid("{$this->root_path}{$memberlist}.{$this->php_ext}?mode=viewprofile&amp;action=view&amp;u={$file_data['user_id']}") . '">' : '';
 		$file_poster .= ( $file_data['user_id'] != ANONYMOUS ) ? $file_data['username'] : $this->user->lang['Guest'];
 		$file_poster .= ( $file_data['user_id'] != ANONYMOUS ) ? '</a>' : '';
 
@@ -290,20 +311,20 @@ class pafiledb_file extends pafiledb_public
 		//overwrite some phpBB3 vars
 		$images['pa_icon_delpost'] = $this->user->img('icon_post_delete', 'DELETE_POST', false, '', 'src');
 		$images['pa_icon_edit'] = $this->user->img('icon_post_edit', 'EDIT_POST', false, '', 'src');
-
+		
 		$this->template->assign_vars( array(
 			'L_CLICK_HERE' => $this->user->lang['Click_here'],
 			'L_AUTHOR' => $this->user->lang['Creator'],
-			'L_VERSION' => $this->user->lang['Version'],
-			'L_SCREENSHOT' => $this->user->lang['Scrsht'],
+			'L_VERSION' => $this->user->lang['FILE_VERSION'],
+			'L_SCREENSHOT' => $this->user->lang['FILE_SCRSHT'],
 			'L_WEBSITE' => $this->user->lang['Docs'],
-			'L_FILE' => $this->user->lang['File'],
-			'L_DESC' => $this->user->lang['Desc'],
-			'L_DATE' => $this->user->lang['Date'],
+			'L_FILE' => $this->user->lang['FILE_TITLE'],
+			'L_DESC' => $this->user->lang['FILE_Desc'],
+			'L_DATE' => $this->user->lang['FILE_Date'],
 			'L_UPDATE_TIME' => $this->user->lang['Update_time'],
-			'L_LASTTDL' => $this->user->lang['Lastdl'],
-			'L_DLS' => $this->user->lang['Dls'],
-			'L_SIZE' => $this->user->lang['File_size'],
+			'L_LASTTDL' => $this->user->lang['FILE_LASTDL'],
+			'L_DLS' => $this->user->lang['FILE_DLS'],
+			'L_SIZE' => $this->user->lang['FILE_SIZE'],
 			'L_EDIT' => $this->user->lang['Editfile'],
 			'L_DELETE' => $this->user->lang['Deletefile'],
 			'L_DOWNLOAD' => $this->user->lang['Downloadfile'],
@@ -324,10 +345,10 @@ class pafiledb_file extends pafiledb_public
 			'FILE_WEBSITE' => $file_website_url,
 			'FILE_DISABLE_MSG' => nl2br( $file_data['disable_msg'] ),
 
-			'AUTH_EDIT' => ( ( $this->auth_user[$file_data['file_catid']]['auth_edit_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
-			'AUTH_DELETE' => ( ( $this->auth_user[$file_data['file_catid']]['auth_delete_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
-			'AUTH_DOWNLOAD' => ( $this->auth_user[$file_data['file_catid']]['auth_download'] ) ? true : false,
-			'AUTH_EMAIL' => ( $this->auth_user[$file_data['file_catid']]['auth_email'] ) ? true : false,
+			'AUTH_EDIT' => ( ( $this->functions->auth_user[$file_data['file_catid']]['auth_edit_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
+			'AUTH_DELETE' => ( ( $this->functions->auth_user[$file_data['file_catid']]['auth_delete_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
+			'AUTH_DOWNLOAD' => ( $this->functions->auth_user[$file_data['file_catid']]['auth_download'] ) ? true : false,
+			'AUTH_EMAIL' => ( $this->functions->auth_user[$file_data['file_catid']]['auth_email'] ) ? true : false,
 
 			'DELETE_IMG' => $images['pa_icon_delpost'],
 			'EDIT_IMG' => $images['pa_icon_edit'],
@@ -341,20 +362,26 @@ class pafiledb_file extends pafiledb_public
 			'LAST' => $file_last_download,
 
 			'U_DOWNLOAD' => $file_download_link,
-			'U_DELETE' => append_sid( $this->this_mxurl( 'action=user_upload&do=delete&file_id=' . $file_id ) ),
-			'U_EDIT' => append_sid( $this->this_mxurl( 'action=user_upload&file_id=' . $file_id ) ),
-			'U_EMAIL' => append_sid( $this->this_mxurl( 'action=email&file_id=' . $file_id ) ),
+			'U_DELETE' => append_sid( $this->functions->mxurl( 'action=user_upload&do=delete&file_id=' . $file_id ) ),
+			'U_EDIT' => append_sid( $this->functions->mxurl( 'action=user_upload&file_id=' . $file_id ) ),
+			'U_EMAIL' => append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ) ),
 
 			// Buttons
-			'B_DOWNLOAD_IMG' => $this->user->create_button('pa_download', $this->user->lang['Downloadfile'], $file_download_link),
-			'B_DELETE_IMG' => $this->user->create_button('pa_icon_delpost', $this->user->lang['Deletefile'], "javascript:delete_item('". mx_append_sid( $this->this_mxurl( 'action=user_upload&do=delete&file_id=' . $file_id )) . "')"),
-			'B_EDIT_IMG' => $this->user->create_button('pa_icon_edit', $this->user->lang['Editfile'], mx_append_sid( $this->this_mxurl( 'action=user_upload&file_id=' . $file_id ) )),
-			'B_EMAIL_IMG' => $this->user->create_button('pa_email', $this->user->lang['Emailfile'], mx_append_sid( $this->this_mxurl( 'action=email&file_id=' . $file_id ))),
+			'B_DOWNLOAD_IMG' => $this->functions->create_button('pa_download', $this->user->lang['Downloadfile'], $file_download_link),
+			'B_DELETE_IMG' => $this->functions->create_button('pa_icon_delpost', $this->user->lang['Deletefile'], "javascript:delete_item('". append_sid( $this->functions->mxurl( 'action=user_upload&do=delete&file_id=' . $file_id )) . "')"),
+			'B_EDIT_IMG' => $this->functions->create_button('pa_icon_edit', $this->user->lang['Editfile'], append_sid( $this->functions->mxurl( 'action=user_upload&file_id=' . $file_id ) )),
+			'B_EMAIL_IMG' => $this->functions->create_button('pa_email', $this->user->lang['Emailfile'], append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ))),
 		));
+		
+		if (!isset($custom_field) && !is_object($custom_field))
+		{		
+			//To do: load class here using injector
+			//$custom_field = new custom_field();
+			//$custom_field->init();
+			
+		}
 
-		$custom_field = new custom_field();
-		$custom_field->init();
-		$custom_field->display_data( $file_id );
+		$this->custom_field->display_data( $file_id );
 
 		//
 		// Ratings
@@ -363,7 +390,7 @@ class pafiledb_file extends pafiledb_public
 		{
 			$file_rating = ( $file_data['rating'] != 0 ) ? round( $file_data['rating'], 2 ) . '/10' : $this->user->lang['Not_rated'];
 
-			if ( $this->auth_user[$file_data['file_catid']]['auth_rate'] )
+			if ( $this->functions->auth_user[$file_data['file_catid']]['auth_rate'] )
 			{
 				$rate_img = $images['pa_rate'];
 			}
@@ -379,7 +406,7 @@ class pafiledb_file extends pafiledb_public
 				// Allowed to rate
 				//
 				'RATE_IMG' => $rate_img,
-				'U_RATE' => append_sid( $this->this_mxurl( 'action=rate&file_id=' . $file_id ) ),
+				'U_RATE' => append_sid( $this->functions->mxurl( 'action=rate&file_id=' . $file_id ) ),
 
 				// Buttons
 				'B_RATE_IMG' => $this->user->create_button('pa_rate', $this->user->lang['Rate'], mx_append_sid( $this->this_mxurl( 'action=rate&file_id=' . $file_id ) )),
@@ -390,14 +417,14 @@ class pafiledb_file extends pafiledb_public
 		//
 		// Comments
 		//
-		if ( $this->comments[$file_data['file_catid']]['activated'] && $this->auth_user[$file_data['file_catid']]['auth_view_comment'])
+		if ( $this->comments[$file_data['file_catid']]['activated'] && $this->functions->auth_user[$file_data['file_catid']]['auth_view_comment'])
 		{
 			$comments_type = $this->comments[$file_data['file_catid']]['internal_comments'] ? 'internal' : 'phpbb';
 
 			//
 			// Instatiate comments
 			//
-			include_once( $this->module_root_path . 'pafiledb/includes/functions_comment.' . $this->php_ext );
+			include_once( $this->module_root_path . 'controller/pafiledb_comments.' . $this->php_ext );
 			$pafiledb_comments = new pafiledb_comments();
 			$pafiledb_comments->init( $file_data, $comments_type );
 			$pafiledb_comments->display_comments();
@@ -406,17 +433,28 @@ class pafiledb_file extends pafiledb_public
 		// ===================================================
 		// assign var for navigation
 		// ===================================================
-		$this->generate_navigation( $file_data['file_catid'] );
+		$this->functions->generate_navigation( $file_data['file_catid'] );
 
 		//
 		// User authorisation levels output
 		//
-		$this->auth_can($file_data['file_catid']);
+		$this->functions->auth_can($file_data['file_catid']);
+		
+		//		
+		// Build navigation link
+		//		
+		$this->template->assign_block_vars('navlinks', array(
+			'FORUM_NAME'	=> $this->user->lang('FILES_DOWNLOADS'),
+			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller'),
+		));
 
+		$this->functions->assign_authors();
+		$this->template->assign_var('PAFILEDB_FOOTER_VIEW', true);
+		
 		//
 		// Output all
 		//
-		$this->display( $this->user->lang['Download'], 'pa_file_body.tpl' );
+		return $this->helper->render('pa_file_body.html', $this->user->lang('FILES_TITLE') . ' &bull; ' . $file_data['file_name']);		
 	}
 }
 ?>

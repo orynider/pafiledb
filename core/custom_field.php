@@ -342,10 +342,10 @@ class custom_field
 		$field_value_temp =  (!empty( $this->field_data_rowset[$file_id][$field_id]['data'] )) ? $this->field_data_rowset[$file_id][$field_id]['data'] : '';
 		$field_value = !empty( $_POST['field'][$field_data['custom_id']] ) ? $_POST['field'][$field_data['custom_id']] : $field_value_temp ;
 		$template->assign_block_vars( 'input', array(
-			'FIELD_NAME' => $field_data['custom_name'],
-			'FIELD_ID' => $field_data['custom_id'],
-			'FIELD_DESCRIPTION' => $field_data['custom_description'],
-			'FIELD_VALUE' =>  $field_value )
+			'FIELD_NAME' 		=>	$field_data['custom_name'],
+			'FIELD_ID' 			=>	$field_data['custom_id'],
+			'FIELD_DESCRIPTION' =>	$field_data['custom_description'],
+			'FIELD_VALUE' 		=>	$field_value )
 		);
 	}
 
@@ -362,10 +362,10 @@ class custom_field
 		$field_value_temp = ( !empty( $this->field_data_rowset[$file_id][$field_id]['data'] ) ) ? $this->field_data_rowset[$file_id][$field_id]['data'] : '';
 		$field_value = !empty( $_POST['field'][$field_data['custom_id']] ) ? $_POST['field'][$field_data['custom_id']] : $field_value_temp ;
 		$template->assign_block_vars( 'textarea', array(
-			'FIELD_NAME' => $field_data['custom_name'],
-			'FIELD_ID' => $field_data['custom_id'],
+			'FIELD_NAME' 		=> $field_data['custom_name'],
+			'FIELD_ID' 			=> $field_data['custom_id'],
 			'FIELD_DESCRIPTION' => $field_data['custom_description'],
-			'FIELD_VALUE' => $field_value )
+			'FIELD_VALUE' 		=> $field_value )
 		);
 	}
 
@@ -380,8 +380,8 @@ class custom_field
 	{
 		global $template;
 		$template->assign_block_vars( 'radio', array(
-			'FIELD_NAME' => $field_data['custom_name'],
-			'FIELD_ID' => $field_data['custom_id'],
+			'FIELD_NAME' 		=> $field_data['custom_name'],
+			'FIELD_ID' 			=> $field_data['custom_id'],
 			'FIELD_DESCRIPTION' => $field_data['custom_description'] )
 		);
 
@@ -412,8 +412,8 @@ class custom_field
 	{
 		global $template;
 		$template->assign_block_vars( 'select', array(
-			'FIELD_NAME' => $field_data['custom_name'],
-			'FIELD_ID' => $field_data['custom_id'],
+			'FIELD_NAME' 		=> $field_data['custom_name'],
+			'FIELD_ID' 			=> $field_data['custom_id'],
 			'FIELD_DESCRIPTION' => $field_data['custom_description'] )
 		);
 
@@ -444,8 +444,8 @@ class custom_field
 	{
 		global $template;
 		$template->assign_block_vars( 'select_multiple', array(
-			'FIELD_NAME' => $field_data['custom_name'],
-			'FIELD_ID' => $field_data['custom_id'],
+			'FIELD_NAME' 		=> $field_data['custom_name'],
+			'FIELD_ID' 			=> $field_data['custom_id'],
 			'FIELD_DESCRIPTION' => $field_data['custom_description'] )
 		);
 

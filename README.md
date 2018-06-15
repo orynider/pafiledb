@@ -1,8 +1,10 @@
 # pafiledb 
 pafileDB Download Manager for phpBB and MXP-CMS
-(based on https://www.phpbb.com/community/viewtopic.php?t=56035 and https://www.phpbb.com/community/viewtopic.php?t=2421316)
+(based on https://www.phpbb.com/community/viewtopic.php?t=56035 
+and https://www.phpbb.com/community/viewtopic.php?t=567227
+and https://www.phpbb.com/community/viewtopic.php?t=2421316)
 # Author [Credits]
-Mohd Basri, PHP Arena, Jon Ohlsson (jonohlsson@hotmail.com) aka Haplo, dmzx, FlorinCB aka orynider
+Mohd Basri (u=19235), PHP Arena, Jon Ohlsson (jonohlsson@hotmail.com) aka Haplo (u=18724), dmzx (u=1427761), FlorinCB aka orynider (u=217732)
 (https://sourceforge.net/p/mxpcms/svn/HEAD/tree/orynider/pafiledb/)
 
 #Features 

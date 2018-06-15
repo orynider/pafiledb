@@ -30,7 +30,7 @@ if(defined('IN_PHPBB') && !defined('PHPBB_URL'))
 class pafiledb_templates
 {
 	/** @var \orynider\pafiledb\core\functions */
-	protected $functions;
+	//protected $functions;
 	/** @var \phpbb\template\template */
 	protected $template;
 	/** @var \phpbb\user */
@@ -68,7 +68,7 @@ class pafiledb_templates
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		//\orynider\pafiledb\core\pafiledb_functions $functions,
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\db\driver\driver_interface $db,
@@ -80,7 +80,7 @@ class pafiledb_templates
 		$php_ext, 
 		$root_path)
 	{
-		$this->functions 			= $functions;
+		//$this->functions 			= $functions;
 		$this->template 			= $template;	
 		/** Info: user setup sandbox for phpBB Proteus
 		$this->user->data = $user_data;
@@ -104,7 +104,7 @@ class pafiledb_templates
 		$this->php_ext 				= $php_ext;		
 		$this->phpbb_root_path 		= $root_path;
 		$this->module_root_path 	= $this->ext_path = $this->ext_manager->get_extension_path('orynider/pafiledb', true);
-		$this->backend 				= $functions->confirm_backend(true);		
+		$this->backend 				= $this->confirm_backend(true);		
 			
 		
 		//
@@ -575,7 +575,7 @@ class pafiledb_templates
 		{		
 			if ((@include $this->phpbb_root_path . $this->template_path . "prosilver2/prosilver2.cfg") === false)
 			{
-				$this->functions->message_die(CRITICAL_ERROR, "Could not open phpBB $this->template_name template config file", '', __LINE__, __FILE__);
+				$this->message_die(CRITICAL_ERROR, "Could not open phpBB $this->template_name template config file", '', __LINE__, __FILE__);
 			}
 			else
 			{
@@ -1131,7 +1131,7 @@ class pafiledb_templates
 		*/
 		if (!$mx_template_config)
 		{
-			$this->functions->message_die(CRITICAL_ERROR, "Could not open " 
+			$this->message_die(CRITICAL_ERROR, "Could not open " 
 			. $this->mx_root_path . $this->module_root_path . $this->default_current_template_path .  '/' . $this->template_name . '.cfg' . " style config file " 
 			. "<br /> current_template_path: " . $this->mx_root_path . $this->module_root_path . $current_template_path_d  . '/' . $template_name_d . '.cfg' 
 			. "<br /> cloned_template_path: " . $this->mx_root_path . $this->module_root_path . $cloned_template_path_d 
@@ -4101,7 +4101,173 @@ class pafiledb_templates
 		return ucwords(str_replace(array(" ","-","_"), ' ', str_replace($pattern, '', $string)));
 	}	
 
-
 	
+	/**
+	 * Confirm Forum Backend Name
+	 *
+	* @return $backend
+	 */
+	function confirm_backend($backend_name = true)
+	{
+		if (isset($this->config['version'])) 
+		{
+			if ($this->config['version']  >= '4.0.0')
+			{			
+				$this->backend = 'phpbb4';
+			}		
+			if (($this->config['version']  >= '3.3.0') && ($this->config['version'] < '4.0.0'))
+			{			
+				$this->backend = 'proteus';
+			}
+			if (($this->config['version']  >= '3.2.0') && ($this->config['version'] < '3.3.0'))
+			{			
+				$this->backend = 'rhea';
+			}
+			if (($this->config['version']  >= '3.1.0') && ($this->config['version'] < '3.2.0'))
+			{			
+				$this->backend = 'ascraeus';
+			}
+			if (($this->config['version']  >= '3.0.0') && ($this->config['version'] < '3.1.0'))
+			{			
+				$this->backend = 'olympus';
+			}
+			if (($this->config['version']  >= '2.0.0') && ($this->config['version'] < '3.0.0'))
+			{			
+				$this->this->backend = 'phpbb2';
+			}
+			if (($this->config['version']  >= '1.0.0') && ($this->config['version'] < '2.0.0'))
+			{			
+				$this->backend = 'phpbb';
+			}			
+		}
+		else if (isset($this->config['portal_backend']))
+		{			
+			$this->backend = $this->config['portal_backend'];
+		}
+		else
+		{			
+			$this->backend = 'internal';
+		}
+		
+		$this->is_phpbb20	= phpbb_version_compare($this->config['version'], '2.0.0@dev', '>=') && phpbb_version_compare($this->config['version'], '3.0.0@dev', '<');		
+		$this->is_phpbb30	= phpbb_version_compare($this->config['version'], '3.0.0@dev', '>=') && phpbb_version_compare($this->config['version'], '3.1.0@dev', '<');		
+		$this->is_phpbb31	= phpbb_version_compare($this->config['version'], '3.1.0@dev', '>=') && phpbb_version_compare($this->config['version'], '3.2.0@dev', '<');
+		$this->is_phpbb32	= phpbb_version_compare($this->config['version'], '3.2.0@dev', '>=') && phpbb_version_compare($this->config['version'], '3.3.0@dev', '<');		
+		$this->is_phpbb33	= phpbb_version_compare($this->config['version'], '3.3.0@dev', '>=') && phpbb_version_compare($this->config['version'], '3.4.0@dev', '<');		
+		
+		$this->is_block = isset($this->config['portal_backend']) ? true : false;
+		
+		if ($this->config['version'] < '3.1.0')
+		{			
+			define('EXT_TABLE',	$table_prefix . 'ext');
+		}		
+		
+		if ($backend_name == true)
+		{			
+			return $this->backend;
+		}	
+	}	
+	
+	/**
+	 * Dummy function
+	 */
+	function message_die($msg_code, $msg_text = '', $msg_title = '', $err_line = '', $err_file = '', $sql = '')
+	{
+		
+		//
+		// Get SQL error if we are debugging. Do this as soon as possible to prevent
+		// subsequent queries from overwriting the status of sql_error()
+		//
+		if (DEBUG && ($msg_code == GENERAL_ERROR || $msg_code == CRITICAL_ERROR))
+		{
+				
+			if ( isset($sql) )
+			{
+				//$sql_error = array(@print_r(@$this->db->sql_error($sql)));				
+				$sql_error['message'] = $sql_error['message'] ? $sql_error['message'] : '<br /><br />SQL : ' . $sql; 
+				$sql_error['code'] = $sql_error['code'] ? $sql_error['code'] : 0;			
+			}
+			else
+			{
+				$sql_error = array(@print_r(@$this->db->sql_error_returned));				
+				$sql_error['message'] = $sql_error['message'] ? $sql_error['message'] : '<br /><br />SQL : ' . $sql; 
+				$sql_error['code'] = $sql_error['code'] ? $sql_error['code'] : 0;					
+			}			
+			
+			$debug_text = '';
+
+			if ( isset($sql_error['message']) )
+			{
+				$debug_text .= '<br /><br />SQL Error : ' . $sql_error['code'] . ' ' . $sql_error['message'];
+			}
+
+			if ( isset($sql_store) )
+			{
+				$debug_text .= "<br /><br />$sql_store";
+			}
+
+			if ( isset($err_line) && isset($err_file) )
+			{
+				$debug_text .= '</br /><br />Line : ' . $err_line . '<br />File : ' . $err_file;
+			}
+		}		
+		
+		switch($msg_code)
+		{
+			case GENERAL_MESSAGE:
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('Information');
+				}
+			break;
+
+			case CRITICAL_MESSAGE:
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('Critical_Information');
+				}
+			break;
+
+			case GENERAL_ERROR:
+				if ( $msg_text == '' )
+				{
+					$msg_text = $this->user->lang('An_error_occured');
+				}
+
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('General_Error');
+				}
+			break;
+
+			case CRITICAL_ERROR:
+
+				if ($msg_text == '')
+				{
+					$msg_text = $this->user->lang('A_critical_error');
+				}
+
+				if ($msg_title == '')
+				{
+					$msg_title = 'phpBB : <b>' . $this->user->lang('Critical_Error') . '</b>';
+				}
+			break;
+		}
+		
+		//
+		// Add on DEBUG info if we've enabled debug mode and this is an error. This
+		// prevents debug info being output for general messages should DEBUG be
+		// set TRUE by accident (preventing confusion for the end user!)
+		//
+		if ( DEBUG && ( $msg_code == GENERAL_ERROR || $msg_code == CRITICAL_ERROR ) )
+		{
+			if ( $debug_text != '' )
+			{
+				$msg_text = $msg_text . '<br /><br /><b><u>DEBUG MODE</u></b> ' . $debug_text;
+			}
+		}		
+		
+		trigger_error($msg_title . ': ' . $msg_text);
+	}	
 }
 ?>

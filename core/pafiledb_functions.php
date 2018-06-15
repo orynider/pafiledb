@@ -41,6 +41,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 @define( 'PA_AUTH_COMMENT_EDIT', 10 );
 @define( 'PA_AUTH_COMMENT_DELETE', 11 );
 
+@define('MX_BUTTON_IMAGE'	, 10);
+@define('MX_BUTTON_TEXT'	, 20);
+@define('MX_BUTTON_GENERIC'	, 30);
+
 class pafiledb_functions extends pafiledb_auth
 {
 	/** @var \phpbb\template\template */
@@ -58,6 +62,9 @@ class pafiledb_functions extends pafiledb_auth
 	/** @var \phpbb\request\request */
 	protected $request;
 	
+	/** @var \phpbb\auth\auth */
+	protected $auth;	
+	
 	/** @var ContainerInterface */
 	protected $container;	
 	
@@ -66,6 +73,9 @@ class pafiledb_functions extends pafiledb_auth
 
 	/** @var \orynider\pafiledb\core\functions_cache */
 	protected $functions_cache;
+	
+	/** @var \orynider\pafiledb\core\templates */
+	protected $templates;	
 	
 	/** @var \phpbb\config\config */
 	protected $config;
@@ -107,7 +117,10 @@ class pafiledb_functions extends pafiledb_auth
 	* @param \phpbb\db\driver\driver_interface		$db
 	* @param \phpbb\controller\helper		 		$helper
 	* @param \phpbb\request\request		 		$request
-	* @param \phpbb\cache\service					$cache	
+	* @param \phpbb\auth\auth			 		$auth	
+	* @param \phpbb\cache\service					$cache
+
+	
 	* @param \orynider\pafiledb\core\functions_cache		$functions_cache		
 	* @param \phpbb\config\config					$config
 	* @param ContainerInterface                    			$container		
@@ -128,9 +141,11 @@ class pafiledb_functions extends pafiledb_auth
 		\phpbb\user $user,
 		\phpbb\db\driver\driver_interface $db,
 		\phpbb\controller\helper $helper,
-		\phpbb\request\request $request,		
+		\phpbb\request\request $request,
+		\phpbb\auth\auth $auth,			
 		\phpbb\cache\driver\driver_interface $cache,
-		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,		
+		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,
+		\orynider\pafiledb\core\pafiledb_templates $pafiledb_templates,		
 		\phpbb\config\config $config,		
 		\phpbb\pagination $pagination,
 		\phpbb\extension\manager $extension_manager, ContainerInterface $container,
@@ -149,8 +164,10 @@ class pafiledb_functions extends pafiledb_auth
 		$this->db 					= $db;
 		$this->helper 				= $helper;
 		$this->request 				= $request;
+		$this->auth 				= $auth;		
 		$this->container 			= $container;
 		$this->pafiledb_cache 		= $pafiledb_cache;
+		$this->templates 			= $pafiledb_templates;
 		$this->cache 				= $cache;		
 		$this->config 				= $config;	
 		$this->pagination 			= $pagination;
@@ -158,7 +175,7 @@ class pafiledb_functions extends pafiledb_auth
 		$this->php_ext 				= $php_ext;
 		$this->root_path 			= $root_path;
 		$this->mx_root_path 		= $root_path;
-		$this->module_root_path 	= $root_path . 'ext/orynider/pafiledb/';		
+		//$this->module_root_path 	= $root_path . 'ext/orynider/pafiledb/';		
 		$this->phpbb_root_path 		= $root_path;		
 		$this->pa_files_table 		= $pa_files_table;
 		$this->pa_cat_table 		= $pa_cat_table;
@@ -195,6 +212,7 @@ class pafiledb_functions extends pafiledb_auth
 		
 		// Read out config values
 		$pafiledb_config = $this->config_values();
+		$this->backend = $this->confirm_backend();		
 		
 		$sql = 'SELECT *
 			FROM ' . $this->pa_cat_table . '
@@ -208,11 +226,11 @@ class pafiledb_functions extends pafiledb_auth
 		$cat_rowset = $this->db->sql_fetchrowset($result);
 		$this->db->sql_freeresult($result);
 
-		$this->auth($cat_rowset);
-
-		for( $i = 0; $i < count( $cat_rowset ); $i++ )
+		$this->auth_user = $this->auth($cat_rowset, 'user');
+		
+		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
 		{
-			print_r($this->auth_user[$cat_rowset[$i]['cat_id']]);
+			//print_r($this->auth_user[$cat_rowset[$i]['cat_id']]);
 			if ( $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
 			{
 				$this->cat_rowset[$cat_rowset[$i]['cat_id']] = $cat_rowset[$i];
@@ -225,7 +243,7 @@ class pafiledb_functions extends pafiledb_auth
 				//
 				$this->comments[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['cat_allow_comments'] == -1 ? ($pafiledb_config['use_comments'] == 1 ? true : false ) : ( $cat_rowset[$i]['cat_allow_comments'] == 1 ? true : false );
 
-				switch($portal_config['portal_backend'])
+				switch($this->backend)
 				{
 					case 'internal':
 						$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] = true; // phpBB or internal comments
@@ -267,8 +285,223 @@ class pafiledb_functions extends pafiledb_auth
 				$this->notification[$cat_rowset[$i]['cat_id']]['notify_group'] = $cat_rowset[$i]['notify_group'] == -1 || $cat_rowset[$i]['notify_group'] == 0 ? (intval($pafiledb_config['notify_group'])) : ( intval($cat_rowset[$i]['notify_group']) ); // Group_id
 			}
 		}
-		print_r($this->cat_rowset);		
+		//print_r($this->cat_rowset);		
 	}
+	
+	/**
+	 * Auth.
+	 *
+	 * $c_access :: category access row
+	 * $u_access :: private access row
+	 *
+	 * @param unknown_type $c_access
+	 */
+	function auth($c_access, $ug_auth_mode = '')
+	{
+		// Read out config values
+		$pafiledb_config = $this->config_values();
+		
+		$a_sql = 'a.auth_view, a.auth_read, a.auth_view_file, a.auth_edit_file, a.auth_delete_file, a.auth_upload, a.auth_download, a.auth_rate, a.auth_email, a.auth_view_comment, a.auth_post_comment, a.auth_edit_comment, a.auth_delete_comment, a.auth_mod, a.auth_search, a.auth_stats, a.auth_toplist, a.auth_viewall, a.auth_approval, a.auth_approval_edit';
+		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
+		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
+
+		// If the user isn't logged on then all we need do is check if the forum
+		// has the type set to ALL, if yes they are good to go, if not then they
+		// are denied access
+		$u_access = array();
+		$global_u_access = array();
+		
+		//$is_admin = ($this->user->data['user_level'] == ADMIN && $this->user->data['session_logged_in']) ? true : 0;
+		$is_admin = $this->is_admin = $this->auth->acl_get('a_') ? true : 0;		
+		
+		if ($this->user->data['user_id'] != 1)
+		{
+			
+			$sql = "SELECT a.cat_id, a.group_id, $a_sql
+				FROM " . $this->pa_auth_access_table . " a, " . USER_GROUP_TABLE . " ug
+				WHERE ug.user_id =" . (int) $this->user->data['user_id'] . "
+					AND ug.user_pending = 0
+					AND a.group_id = ug.group_id";
+
+			if ( !($result = $this->db->sql_query($sql)) )
+			{
+				$this->message_die( GENERAL_ERROR, 'Failed obtaining category access control lists', '', __LINE__, __FILE__, $sql );
+			}
+			
+			while ($row = $this->db->sql_fetchrow($result))
+			{				
+				if ( $row['cat_id'] )
+				{
+					$u_access[$row['cat_id']][] = $row;
+				}
+				else
+				{
+					$global_u_access = $row;
+				}				
+			}
+		}
+		
+		for( $i = 0; $i < $fields = count($this->auth_fields); $i++ )
+		{
+			$key = $this->auth_fields[$i];
+
+			// If the user is logged on and the forum type is either ALL or REG then the user has access
+
+			// If the type if ACL, MOD or ADMIN then we need to see if the user has specific permissions
+			// to do whatever it is they want to do ... to do this we pull relevant information for the
+			// user (and any groups they belong to)
+
+			// Now we compare the users access level against the forums. We assume here that a moderator
+			// and admin automatically have access to an ACL forum, similarly we assume admins meet an
+			// auth requirement of MOD
+
+			for( $k = 0; $k < $cats = count( $c_access ); $k++ )
+			{
+				$value = $c_access[$k][$key];
+				$c_cat_id = $c_access[$k]['cat_id'];
+
+				switch ($value)
+				{
+					case AUTH_ALL:
+						$this->auth_user[$c_cat_id][$key] = true;
+						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Anonymous_users'];
+					break;
+
+					case AUTH_REG:
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? true : 0;
+						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Registered_Users'];
+					break;
+
+					case AUTH_ACL:
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? $this->auth_check_user( AUTH_ACL, $key, $u_access[$c_cat_id], $is_admin ) : 0;		
+						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Users_granted_access'];
+					break;
+
+					case AUTH_MOD:
+						$this->auth_user[$c_cat_id][$key] = ($this->user->data['user_id'] != 1) ? $this->auth_check_user(AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin) : 0;
+						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Moderators'];
+					break;
+
+					case AUTH_ADMIN:
+						$this->auth_user[$c_cat_id][$key] = $is_admin;
+						$this->auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Administrators'];
+						break;
+
+					default:
+						$this->auth_user[$c_cat_id][$key] = true; //Temp fix for root category
+					break;
+				}
+			}
+		}
+		
+		for( $k = 0; $k < $cats = count($c_access); $k++ )
+		{
+			$c_cat_id = $c_access[$k]['cat_id'];		
+			$is_pa_mod = $this->pa_auth_check_user(AUTH_MOD, 'auth_mod', $u_access[$c_cat_id], $is_admin);		
+			//$this->auth_user[$c_cat_id]['auth_mod'] = ($this->user->data['user_id'] != 1) ? $is_pa_mod : 0;
+		}
+
+		for( $i = 0; $i < count( $this->auth_fields_global ); $i++ )
+		{
+			$key = $this->auth_fields_global[$i];
+			$value = $pafiledb_config[$this->auth_fields_global[$i]];
+			
+			switch ($value)
+			{
+				case AUTH_ALL:
+					$this->auth_global[$key] = true;
+					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Anonymous_users'];
+				break;
+
+				case AUTH_REG:
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? true : 0;
+					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Registered_Users'];
+				break;
+
+				case AUTH_ACL:
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? $this->global_auth_check_user( AUTH_ACL, $key, $global_u_access, $is_admin ) : 0;
+					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Users_granted_access'];
+				break;
+
+				case AUTH_MOD:
+					$this->auth_global[$key] = ($this->user->data['user_id'] != 1) ? $this->global_auth_check_user( AUTH_MOD, 'auth_mod', $global_u_access, $is_admin ) : 0;
+					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Moderators'];
+				break;
+
+				case AUTH_ADMIN:
+					$this->auth_global[$key] = $is_admin;
+					$this->auth_global[$key . '_type'] = $this->user->lang['Auth_Administrators'];
+				break;
+
+				default:
+					$this->auth_global[$key] = 0;
+				break;
+			}
+		}
+		
+		switch ($ug_auth_mode)
+		{
+			case 'global':
+				return $this->auth_global;
+			break;
+			
+			case 'user':
+				return $this->auth_user;
+			break;
+			
+			default:
+
+			break;
+		}		
+	}	
+	
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $type
+	 * @param unknown_type $key
+	 * @param unknown_type $u_access
+	 * @param unknown_type $is_admin
+	 * @return unknown
+	 */
+	function pa_auth_check_user($type, $key, $u_access, $is_admin)
+	{
+		$this->auth_user = 0;
+		
+		if (!is_array($u_access))
+		{
+			//print_r("3rd argument of auth_check_user() is invalid </br>");
+		}			
+		
+		if ($count = count($u_access))
+		{
+			for( $j = 0; $j < $count; $j++ )
+			{
+				$result = 0;
+				switch ($type)
+				{
+					case AUTH_ACL:
+						$result = $u_access[$j][$key];
+
+					case AUTH_MOD:
+						$result = $u_access[$j]['auth_mod'];
+
+					case AUTH_ADMIN:
+						$result = $is_admin;
+					break;
+				}
+
+				$this->auth_user = $result;
+				
+			}
+		}
+		else
+		{
+			$this->auth_user = $is_admin;
+		}
+
+		return $this->auth_user;
+	}	
 	
 	public function pafiledb_functions()
 	{
@@ -323,6 +556,7 @@ class pafiledb_functions extends pafiledb_auth
 		
 		// Read out config values
 		$pafiledb_config = $this->config_values();
+		$this->backend = $this->confirm_backend();		
 		
 		$sql = 'SELECT *
 			FROM ' . $this->pa_cat_table . '
@@ -718,22 +952,22 @@ class pafiledb_functions extends pafiledb_auth
 	*/
 	public function generate_cat_nav(&$cat_data)
 	{
-		$parent_cat_id = $this->request->variable('cat_id', 0);
+		$parent_cat_id = $this->request->variable('cat_id', $cat_data['cat_id']);
 
 		// Get category parents
 		$parents_data = $this->get_parents_data($cat_data);
-
+		
 		// Build navigation link
 		$this->template->assign_block_vars('navlinks', array(
 			'FORUM_NAME'	=> $this->user->lang('FILES_DOWNLOADS'),
 			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller'),
-		));
-
+		));	
+		
 		$this->template->assign_block_vars('navlinks', array(
 			'FORUM_NAME'	=> $cat_data['cat_name'],
 			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller_cat', array('cat_id' => $parent_cat_id)),
 		));
-
+		
 		if (!empty($parents_data))
 		{
 			foreach ($parents_data as $parent_cat_id => $parent_data)
@@ -800,7 +1034,7 @@ class pafiledb_functions extends pafiledb_auth
 				'CAT_NAME'		=> $cat_name,
 				'S_NO_CAT'		=> true,
 				'MAIN_LINK'		=> $this->helper->route('orynider_pafiledb_controller'),
-				'U_BACK'		=> append_sid("{$this->root_path}index.$this->php_ext"),
+				'U_BACK'		=> append_sid("{$this->root_path}index.{$this->php_ext}"),
 			));
 		}
 		else
@@ -857,10 +1091,9 @@ class pafiledb_functions extends pafiledb_auth
 				{
 					$l_subcats = '';
 				}
-
-				$board_url = generate_board_url() . '/';
-				$folder_image = (($row['left_id'] + 1) != $row['right_id']) ? '<img src="'. $board_url. 'adm/images/icon_subfolder.gif" alt="' . $this->user->lang['SUBFORUM'] . '" />' : '<img src="'. $board_url. 'adm/images/icon_folder.gif" alt="' . $this->user->lang['FOLDER'] . '" />';
-
+				
+				$folder_image = (($row['left_id'] + 1) != $row['right_id']) ? $this->templates->img('pa_icon_subfolder', $this->user->lang['SUBFORUM'], false, '', 'full_tag') : $this->templates->img('pa_icon_folder', $this->user->lang['FOLDER'], false, '', 'full_tag');
+				
 				if ($row['last_download'])
 				{
 					$sql2 = 'SELECT *
@@ -919,7 +1152,7 @@ class pafiledb_functions extends pafiledb_auth
 			$this->pagination->generate_template_pagination($pagination_url, 'pagination', 'start', $total_cat, $dls, $start);
 
 			$this->template->assign_vars(array(
-				'LAST_POST_IMG'			=> $this->user->img('icon_topic_latest', 'VIEW_LATEST_POST'),
+				'LAST_POST_IMG'			=> $this->templates->img('icon_topic_latest', 'VIEW_LATEST_POST'),
 				'FILES_CATEGORIES'		=> ($total_cat == 1) ? sprintf($this->user->lang['FILES_CAT'], $total_cat) : sprintf($this->user->lang['FILES_CATS'], $total_cat),
 				'FILES_SUB_CAT_SHOW'	=> ($total_sub_cat == 0) ? false : true,
 				'FILES_SUB_CATEGORIES'	=> ($total_sub_cat == 1) ? sprintf($this->user->lang['FILES_SUB_CATEGORY'], $total_sub_cat) : sprintf($this->user->lang['FILES_SUB_CATEGORIES'], $total_sub_cat),
@@ -951,7 +1184,7 @@ class pafiledb_functions extends pafiledb_auth
 		$cat_nav = array();
 		$this->category_nav( $this->cat_rowset[$cat_id]['cat_parent'], $cat_nav );
 
-		$sql = 'UPDATE ' . $this->pa_category_table . "
+		$sql = 'UPDATE ' . $this->pa_cat_table . "
 			SET parents_data = ''
 			WHERE cat_parent = " . $this->cat_rowset[$cat_id]['cat_parent'];
 
@@ -960,7 +1193,7 @@ class pafiledb_functions extends pafiledb_auth
 			$this->message_die( GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql );
 		}
 
-		$sql = 'UPDATE ' . $this->pa_category_table . "
+		$sql = 'UPDATE ' . $this->pa_cat_table . "
 				SET cat_files = '-1',
 				cat_last_file_id = '0',
 				cat_last_file_name = '',
@@ -1038,7 +1271,7 @@ class pafiledb_functions extends pafiledb_auth
 				$number_of_items = $row['total_files'];
 			}
 
-			$sql = 'UPDATE ' . $this->pa_category_table . "
+			$sql = 'UPDATE ' . $this->pa_cat_table . "
 					SET cat_files = $number_of_items
 					WHERE cat_id = $cat_id";
 
@@ -1159,7 +1392,7 @@ class pafiledb_functions extends pafiledb_auth
 						$truncate = true;
 						break;
 					}
-					$cat_sub .= (!empty($cat_sub) ? '<span class=' . $class . '>, </span>' : '') . '<a href="' . append_sid( $this->this_mxurl( 'action=category&cat_id=' . $cat_row['cat_id'] ) ) . '" class=' . $class . '>' . $cat_row['cat_name'] . '</a>';
+					$cat_sub .= (!empty($cat_sub) ? '<span class=' . $class . '>, </span>' : '') . '<a href="' . append_sid( $this->mxurl( 'action=category&cat_id=' . $cat_row['cat_id'] ) ) . '" class=' . $class . '>' . $cat_row['cat_name'] . '</a>';
 				}
 				/*
 				else
@@ -1176,7 +1409,7 @@ class pafiledb_functions extends pafiledb_auth
 									$truncate = true;
 									break;
 								}
-								$cat_sub .= (!empty($cat_sub) ? '<span class=' . $class . '>, </span>' : '') . '<a href="' . append_sid( $this->this_mxurl( 'action=category&cat_id=' . $sub_cat_row['cat_id'] ) ) . '" class=' . $class . '>' . $sub_cat_row['cat_name'] . '</a>';
+								$cat_sub .= (!empty($cat_sub) ? '<span class=' . $class . '>, </span>' : '') . '<a href="' . append_sid( $this->mxurl( 'action=category&cat_id=' . $sub_cat_row['cat_id'] ) ) . '" class=' . $class . '>' . $sub_cat_row['cat_name'] . '</a>';
 							}
 						}
 					}
@@ -1199,18 +1432,27 @@ class pafiledb_functions extends pafiledb_auth
 	 */
 	function generate_navigation( $cat_id )
 	{
+		if (empty($this->cat_rowset[$cat_id]))
+		{
+			//print_r('cat_rowset empty '.$this->cat_rowset[$cat_id].'</br>');
+			$cat_parent = 0;
+		}
+		elseif ( $this->cat_rowset[$cat_id]['parents_data'] == '' )		
+		{
+			$cat_parent = $this->cat_rowset[$cat_id]['cat_parent'];	
+		}		
+		
 		if ( $this->cat_rowset[$cat_id]['parents_data'] == '' )
 		{
 			$cat_nav = array();
 			$this->category_nav( $this->cat_rowset[$cat_id]['cat_parent'], $cat_nav );
 
-			$sql = 'UPDATE ' . $this->pa_category_table . "
+			$sql = 'UPDATE ' . $this->pa_cat_table . "
 				SET parents_data = '" . addslashes( serialize( $cat_nav ) ) . "'
-				WHERE cat_parent = " . $this->cat_rowset[$cat_id]['cat_parent'];
-
-			if ( !( $this->db->sql_query( $sql ) ) )
+				WHERE cat_parent = " . $cat_parent;
+			if (!( $this->db->sql_query($sql)))
 			{
-				$this->message_die( GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql );
+				$this->message_die(GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql);
 			}
 		}
 		else
@@ -1224,14 +1466,15 @@ class pafiledb_functions extends pafiledb_auth
 			{
 				$this->template->assign_block_vars( 'navlinks', array(
 					'CAT_NAME' => $parent_name,
-					'U_VIEW_CAT' => append_sid( $this->this_mxurl( 'action=category&cat_id=' . $parent_cat_id ) ) )
+					'U_VIEW_CAT' => append_sid( $this->mxurl( 'action=category&cat_id=' . $parent_cat_id ) ) )
 				);
+				
 			}
 		}
 
 		$this->template->assign_block_vars( 'navlinks', array(
 			'CAT_NAME' => $this->cat_rowset[$cat_id]['cat_name'],
-			'U_VIEW_CAT' => append_sid( $this->this_mxurl( 'action=category&cat_id=' . $this->cat_rowset[$cat_id]['cat_id'] ) ) )
+			'U_VIEW_CAT' => append_sid( $this->mxurl('action=category&cat_id=' . !empty($this->cat_rowset[$cat_id]['cat_id']) ? $this->cat_rowset[$cat_id]['cat_id'] : $cat_id) ) )
 		);
 
 		return;
@@ -1291,7 +1534,7 @@ class pafiledb_functions extends pafiledb_auth
 			$file_info = $temp_cat[0];
 			if ( !empty( $file_info ) )
 			{
-				$sql = 'UPDATE ' . $this->pa_category_table . "
+				$sql = 'UPDATE ' . $this->pa_cat_table . "
 					SET cat_last_file_id = " . intval( $file_info['file_id'] ) . ",
 					cat_last_file_name = '" . addslashes( $file_info['file_name'] ) . "',
 					cat_last_file_time = " . intval( $file_info['file_time'] ) . "
@@ -1347,7 +1590,7 @@ class pafiledb_functions extends pafiledb_auth
 		{
 			if ( !$this->user->data['is_registered'] )
 			{
-				$redirect = ( $cat_id != PA_ROOT_CAT ) ? $this->this_mxurl( "action=category&cat_id=$cat_id" ) : $this->this_mxurl();
+				$redirect = ( $cat_id != PA_ROOT_CAT ) ? $this->mxurl( "action=category&cat_id=$cat_id" ) : $this->mxurl();
 				login_box($redirect, ((isset($this->user->lang['LOGIN_EXPLAIN_' . strtoupper($mode)])) ? $this->user->lang['LOGIN_EXPLAIN_' . strtoupper($mode)] : $this->user->lang['LOGIN_EXPLAIN_PAFILEDB']));
 			}
 			$this->message_die( GENERAL_ERROR, 'Either you are not allowed to view any category, or there is no category in the database' );
@@ -1396,8 +1639,8 @@ class pafiledb_functions extends pafiledb_auth
 					$last_file_time = $this->create_date( $this->config['default_dateformat'], $last_file_info['file_time'], $this->config['board_timezone'] );
 					$last_file = $last_file_time . '<br />';
 					$last_file_name = ( strlen( stripslashes( $last_file_info['file_name'] ) ) > 20 ) ? substr( stripslashes( $last_file_info['file_name'] ), 0, 20 ) . '...' : stripslashes( $last_file_info['file_name'] );
-					$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '" alt="' . stripslashes( $last_file_info['file_name'] ) . '" title="' . stripslashes( $last_file_info['file_name'] ) . '">' . $last_file_name . '</a> ';
-					$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->user->img('pa_icon_latest_reply', '', false, '', 'src') . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
+					$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '" alt="' . stripslashes( $last_file_info['file_name'] ) . '" title="' . stripslashes( $last_file_info['file_name'] ) . '">' . $last_file_name . '</a> ';
+					$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->templates->img('pa_icon_latest_reply', '', false, '', 'src') . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
 				}
 				else
 				{
@@ -1412,9 +1655,9 @@ class pafiledb_functions extends pafiledb_auth
 
 				$sub_cat = $this->get_sub_cat( $subcat_id );
 				$this->template->assign_block_vars('catcol.no_cat_parent', array(
-					'U_CAT' => append_sid( $this->this_mxurl( 'action=category&cat_id=' . $subcat_id ) ),
+					'U_CAT' => append_sid( $this->mxurl( 'action=category&cat_id=' . $subcat_id ) ),
 					'SUB_CAT' => ( !empty( $sub_cat ) ) ? "&nbsp;&nbsp;$sub_cat" : "",
-					'CAT_IMAGE' => ( $is_new ) ? $this->user->img('forum_unread', '', false, '', 'src') : $this->user->img('forum_read', '', false, '', 'src'),
+					'CAT_IMAGE' => ( $is_new ) ? $this->templates->img('forum_unread', '', false, '', 'src') : $this->templates->img('forum_read', '', false, '', 'src'),
 					'CAT_NAME' => $subcat_row['cat_name'],
 					'FILECAT' => $this->items_in_cat( $subcat_id ) )
 				);
@@ -1439,7 +1682,7 @@ class pafiledb_functions extends pafiledb_auth
 		{
 			if ( !$this->user->data['is_registered'] )
 			{
-				$redirect = ( $cat_id != PA_ROOT_CAT ) ? $this->this_mxurl( "$action_name=$action_default&cat_id=$cat_id" ) : $this->this_mxurl();
+				$redirect = ( $cat_id != PA_ROOT_CAT ) ? $this->mxurl( "$action_name=$action_default&cat_id=$cat_id" ) : $this->mxurl();
 				login_box($redirect, ((isset($this->user->lang['LOGIN_EXPLAIN_' . strtoupper($mode)])) ? $this->user->lang['LOGIN_EXPLAIN_' . strtoupper($mode)] : $this->user->lang['LOGIN_EXPLAIN_PAFILEDB']));
 			}
 			$this->message_die( GENERAL_ERROR, 'Either you are not allowed to view any category, or there is no category in the database' );
@@ -1471,8 +1714,8 @@ class pafiledb_functions extends pafiledb_auth
 						$last_file_time = $this->create_date( $this->config['default_dateformat'], $last_file_info['file_time'], $this->config['board_timezone'] );
 						$last_file = $last_file_time . '<br />';
 						$last_file_name = ( strlen( stripslashes( $last_file_info['file_name'] ) ) > 20 ) ? substr( stripslashes( $last_file_info['file_name'] ), 0, 20 ) . '...' : stripslashes( $last_file_info['file_name'] );
-						$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '" alt="' . stripslashes( $last_file_info['file_name'] ) . '" title="' . stripslashes( $last_file_info['file_name'] ) . '">' . $last_file_name . '</a> ';
-						$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->user->img['pa_icon_latest_reply'] . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
+						$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '" alt="' . stripslashes( $last_file_info['file_name'] ) . '" title="' . stripslashes( $last_file_info['file_name'] ) . '">' . $last_file_name . '</a> ';
+						$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->user->img['pa_icon_latest_reply'] . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
 					}
 					else
 					{
@@ -1489,9 +1732,9 @@ class pafiledb_functions extends pafiledb_auth
 
 					$this->template->assign_block_vars( 'no_cat_parent', array(
 						'IS_HIGHER_CAT' => false,
-						'U_CAT' => append_sid( $this->this_mxurl( "$action_name=$action_default&cat_id=" . $subcat_id . $map_xtra ) ),
+						'U_CAT' => append_sid( $this->mxurl( "$action_name=$action_default&cat_id=" . $subcat_id . $map_xtra ) ),
 						'SUB_CAT' => ( !empty( $sub_cat ) ) ? '<br /><b>' . $this->user->lang['Sub_category'] . ': </b>' . $sub_cat :  '',
-						'CAT_IMAGE' => ( $is_new ) ? $this->user->img('forum_unread', '', false, '', 'src') : $this->user->img('forum_read', '', false, '', 'src'),
+						'CAT_IMAGE' => ( $is_new ) ? $this->templates->img('forum_unread', '', false, '', 'src') : $this->templates->img('forum_read', '', false, '', 'src'),
 						'CAT_NEW_FILE' => ( $is_new ) ? $this->user->lang['New_file'] : $this->user->lang['No_new_file'],
 						'CAT_NAME' => $subcat_row['cat_name'],
 						'FILECAT' => $this->items_in_cat( $subcat_id ),
@@ -1532,7 +1775,7 @@ class pafiledb_functions extends pafiledb_auth
 					{
 						$this->template->assign_block_vars( 'no_cat_parent', array(
 							'IS_HIGHER_CAT' => true,
-							'U_CAT' => append_sid( $this->this_mxurl( "$action_name=$action_default&cat_id=" . $subcat_id . $map_xtra) ),
+							'U_CAT' => append_sid( $this->mxurl( "$action_name=$action_default&cat_id=" . $subcat_id . $map_xtra) ),
 							'CAT_NAME' => $subcat_row['cat_name'] )
 						);
 					}
@@ -1549,8 +1792,8 @@ class pafiledb_functions extends pafiledb_auth
 								$last_file_time = $this->create_date( $this->config['default_dateformat'], $last_file_info['file_time'], $this->config['board_timezone'] );
 								$last_file = $last_file_time . '<br />';
 								$last_file_name = ( strlen( $last_file_info['file_name'] ) > 20 ) ? substr( $last_file_info['file_name'], 0, 20 ) . '...' : $last_file_info['file_name'];
-								$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '">' . $last_file_name . '</a> ';
-								$last_file .= '<a href="' . append_sid( $this->this_mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->user->img['pa_icon_latest_reply'] . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
+								$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '">' . $last_file_name . '</a> ';
+								$last_file .= '<a href="' . append_sid( $this->mxurl( 'action=file&file_id=' . $last_file_info['file_id'] ) ) . '"><img src="' . $this->user->img['pa_icon_latest_reply'] . '" border="0" alt="' . $this->user->lang['View_latest_file'] . '" title="' . $this->user->lang['View_latest_file'] . '" /></a>';
 							}
 							else
 							{
@@ -1568,9 +1811,9 @@ class pafiledb_functions extends pafiledb_auth
 
 							$this->template->assign_block_vars('no_cat_parent', array(
 								'IS_HIGHER_CAT' => false,
-								'U_CAT' => append_sid( $this->this_mxurl( "$action_name=$action_default&cat_id=" . $sub_cat_rowset[$k]['cat_id'] . $map_xtra ) ),
+								'U_CAT' => append_sid( $this->mxurl( "$action_name=$action_default&cat_id=" . $sub_cat_rowset[$k]['cat_id'] . $map_xtra ) ),
 								'SUB_CAT' => ( !empty( $sub_cat ) ) ? '<br /><b>' . $this->user->lang['Sub_category'] . ': </b>' . $sub_cat : '',
-								'CAT_IMAGE' => ( $is_new ) ? $this->user->img('forum_unread', '', false, '', 'src') : $this->user->img('forum_read', '', false, '', 'src'),
+								'CAT_IMAGE' => ( $is_new ) ? $this->templates->img('forum_unread', '', false, '', 'src') : $this->templates->img('forum_read', '', false, '', 'src'),
 								'CAT_NEW_FILE' => ( $is_new ) ? $this->user->lang['New_file'] : $this->user->lang['No_new_file'],
 								'CAT_NAME' => $sub_cat_rowset[$k]['cat_name'],
 								'FILECAT' => $this->items_in_cat( $sub_cat_rowset[$k]['cat_id'] ),
@@ -1632,7 +1875,7 @@ class pafiledb_functions extends pafiledb_auth
 		{
 			case 'oracle':
 				$sql = "SELECT f1.*, f1.file_id, r.votes_file, AVG(r.rate_point) AS rating, COUNT(r.votes_file) AS total_votes, u.user_id, u.username, COUNT(c.file_id) AS total_comments
-					FROM " . $this->pa_files_table . " AS f1, " . $this->pa_votes_table . " AS r, " . USERS_TABLE . " AS u, " . $this->pa_comments_table . " AS c, " . $this->pa_category_table . " AS cat
+					FROM " . $this->pa_files_table . " AS f1, " . $this->pa_votes_table . " AS r, " . USERS_TABLE . " AS u, " . $this->pa_comments_table . " AS c, " . $this->pa_cat_table . " AS cat
 					WHERE f1.file_id = r.votes_file(+)
 					AND f1.user_id = u.user_id(+)
 					AND f1.file_id = c.file_id(+)
@@ -1651,7 +1894,7 @@ class pafiledb_functions extends pafiledb_auth
 						LEFT JOIN " . $this->pa_votes_table . " AS r ON f1.file_id = r.votes_file
 						LEFT JOIN " . USERS_TABLE . " AS u ON f1.user_id = u.user_id
 						LEFT JOIN " . $this->pa_comments_table . " AS c ON f1.file_id = c.file_id
-						LEFT JOIN " . $this->pa_category_table . " AS cat ON f1.file_catid = cat.cat_id
+						LEFT JOIN " . $this->pa_cat_table . " AS cat ON f1.file_catid = cat.cat_id
 					WHERE f1.file_pin = " . FILE_PINNED . "
 					AND f1.file_approved = 1
 					$cat_where
@@ -1703,7 +1946,7 @@ class pafiledb_functions extends pafiledb_auth
 					FROM " . $this->pa_files_table . " AS f1
 						LEFT JOIN " . $this->pa_votes_table . " AS r ON f1.file_id = r.votes_file
 						LEFT JOIN " . USERS_TABLE . " AS u ON f1.user_id = u.user_id
-						LEFT JOIN " . $this->pa_category_table . " AS cat ON f1.file_catid = cat.cat_id
+						LEFT JOIN " . $this->pa_cat_table . " AS cat ON f1.file_catid = cat.cat_id
 					WHERE f1.file_pin <> " . FILE_PINNED . "
 					AND f1.file_approved = 1
 					$cat_where
@@ -1780,7 +2023,7 @@ class pafiledb_functions extends pafiledb_auth
 			}
 
 			$cat_name = ( empty( $cat_id ) ) ? $this->cat_rowset[$file_rowset[$i]['file_catid']]['cat_name'] : '';
-			$cat_url = append_sid( $this->this_mxurl( 'action=category&cat_id=' . $file_rowset[$i]['file_catid'] ) );
+			$cat_url = append_sid( $this->mxurl( 'action=category&cat_id=' . $file_rowset[$i]['file_catid'] ) );
 			// ===================================================
 			// Get the post icon fot this file
 			// ===================================================
@@ -1788,7 +2031,7 @@ class pafiledb_functions extends pafiledb_auth
 			{
 				if ( $file_rowset[$i]['file_posticon'] == 'none' || $file_rowset[$i]['file_posticon'] == 'none.gif' )
 				{
-					$posticon = $this->user->img['mx_spacer'];
+					$posticon = $this->templates->img('mx_spacer', '', false, '', 'src');
 				}
 				else
 				{
@@ -1797,7 +2040,7 @@ class pafiledb_functions extends pafiledb_auth
 			}
 			else
 			{
-				$posticon = $this->user->img('sticky_read', '', false, '', 'src');
+				$posticon = $this->templates->img('sticky_read', '', false, '', 'src');
 			}
 
 			$save_as_icon = $this->module_root_path . ICONS_DIR . 'icon_download1.gif';
@@ -1812,8 +2055,8 @@ class pafiledb_functions extends pafiledb_auth
 			// ===================================================
 			if (!$file_rowset[$i]['file_disable'])
 			{
-				$dl_link_jump = append_sid( $this->this_mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'], true, false ) );
-				$dl_link_jump_save_as = append_sid( $this->this_mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'] . '&save_as', true, false ) );
+				$dl_link_jump = append_sid( $this->mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'], true, false ) );
+				$dl_link_jump_save_as = append_sid( $this->mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'] . '&save_as', true, false ) );
 			}
 			else
 			{
@@ -1831,8 +2074,8 @@ class pafiledb_functions extends pafiledb_auth
 				'DATE' => $date,
 				'UPDATED' => $date_updated,
 				'L_RATING' => $this->user->lang['DlRating'],
-				'DO_RATE' => $this->auth_user[$cat_id]['auth_rate'] ? '<a href="' . append_sid( $this->this_mxurl( 'action=rate&amp;file_id=' . $file_rowset[$i]['file_id'] ) ) . '">' . $this->user->lang['Do_rate'] . '</a>' : '',
-				'L_COMMENT' => '<a href="' . append_sid( $this->this_mxurl( 'action=post_comment&amp;item_id=' . $file_rowset[$i]['file_id'] . '&amp;cat_id=' . $file_rowset[$i]['file_catid'] ) ) . '">' . $this->user->lang['Comments'] . '</a>',
+				'DO_RATE' => $this->auth_user[$cat_id]['auth_rate'] ? '<a href="' . append_sid( $this->mxurl( 'action=rate&amp;file_id=' . $file_rowset[$i]['file_id'] ) ) . '">' . $this->user->lang['Do_rate'] . '</a>' : '',
+				'L_COMMENT' => '<a href="' . append_sid( $this->mxurl( 'action=post_comment&amp;item_id=' . $file_rowset[$i]['file_id'] . '&amp;cat_id=' . $file_rowset[$i]['file_catid'] ) ) . '">' . $this->user->lang['Comments'] . '</a>',
 				'RATING' => $rating,
 				'FILE_VOTES' => $file_rowset[$i]['total_votes'],
 				'FILE_DLS' => $file_rowset[$i]['file_dls'],
@@ -1841,14 +2084,14 @@ class pafiledb_functions extends pafiledb_auth
 
 				'U_CAT' => $cat_url,
 				'SHOW_RATINGS' => ( $pa_use_ratings ?  true : false ),
-				'U_FILE' => append_sid( $this->this_mxurl( 'action=file&file_id=' . $file_rowset[$i]['file_id'], false, false, $target_page_id ) ),
+				'U_FILE' => append_sid( $this->mxurl( 'action=file&file_id=' . $file_rowset[$i]['file_id'], false, false, $target_page_id ) ),
 				'U_FILE_JUMP' => $dl_link_jump,
 				'U_FILE_JUMP_SAVE_AS' => $dl_link_jump_save_as,
 				'COLOR' => ( ( $i % 2 ) ? "row2" : "row1" ),
 				'POSTER' => $file_poster,
 				'FILE_DISABLE_MSG' => nl2br( $file_rowset[$i]['disable_msg'] ),
 				
-				'FILE_NEW_IMAGE' => $this->user->img('icon_pa_file_new', '', false, '', 'src'),
+				'FILE_NEW_IMAGE' => $this->templates->img('icon_pa_file_new', '', false, '', 'src'),
 				
 				'HAS_SCREENSHOTS' => ( !empty( $file_rowset[$i]['file_ssurl'] ) ) ? true : false,
 				'SS_AS_LINK' => ( $file_rowset[$i]['file_sshot_link'] ) ? true : false,
@@ -1919,13 +2162,13 @@ class pafiledb_functions extends pafiledb_auth
 
 				'SORT_ASC' => ( $sort_order == 'ASC' ) ? 'selected="selected"' : '',
 				'SORT_DESC' => ( $sort_order == 'DESC' ) ? 'selected="selected"' : '',
-				'PAGINATION' => $this->generate_pagination( append_sid( $this->this_mxurl( "action=$action&amp;sort_method=$sort_method&amp;sort_order=$sort_order" ) ), $total_file, $pafiledb_config['pagination'], $start ),
+				'PAGINATION' => $this->generate_pagination( append_sid( $this->mxurl( "action=$action&amp;sort_method=$sort_method&amp;sort_order=$sort_order" ) ), $total_file, $pafiledb_config['pagination'], $start ),
 				'PAGE_NUMBER' => sprintf( $this->user->lang['Page_of'], ( floor( $start / $pafiledb_config['pagination'] ) + 1 ), ceil( $total_file / $pafiledb_config['pagination'] ) ),
 				'ID' => $cat_id,
 				'START' => $start,
 				'SHOW_RATINGS' => ( $pa_use_ratings ) ? true : false,
 
-				'S_ACTION_SORT' => append_sid( $this->this_mxurl( "action=$action" ) ) )
+				'S_ACTION_SORT' => append_sid( $this->mxurl( "action=$action" ) ) )
 			);
 		}
 		else
@@ -2132,84 +2375,6 @@ class pafiledb_functions extends pafiledb_auth
 	}
 	
 	/**
-	 * Create buttons.
-	 *
-	 * You can create code for buttons:
-	 * 1) Simple textlinks (MX_BUTTON_TEXT)
-	 * 2) Standard image links (MX_BUTTON_IMAGE)
-	 * 3) Generic buttons, with spanning text on top background image (MX_BUTTON_GENERIC)
-	 *
-	 * Note: The rollover feature is done using a css shift technique, so you do not need separate images
-	 *
-	 * @param unknown_type $type
-	 * @param unknown_type $label
-	 * @param unknown_type $url
-	 * @param unknown_type $img
-	 */
-	function create_button($key, $label, $url)
-	{
-		$this->buttontype = MX_BUTTON_IMAGE;
-
-		switch($this->buttontype)
-		{
-			case MX_BUTTON_TEXT:
-				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
-			break;
-
-			case MX_BUTTON_IMAGE:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->user->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
-			break;
-
-			case MX_BUTTON_GENERIC:
-				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
-			break;
-
-			default:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->user->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
-			break;
-		}
-	}
-
-	/**
-	 * Create icons.
-	 *
-	 * You can create code for icons:
-	 * 1) Simple textlinks (MX_BUTTON_TEXT)
-	 * 2) Standard image links (MX_BUTTON_IMAGE)
-	 * 3) Generic buttons, with spanning text on top background image (MX_BUTTON_GENERIC)
-	 *
-	 * Note: The rollover feature is done using a css shift technique, so you do not need separate images
-	 *
-	 * @param unknown_type $type
-	 * @param unknown_type $label
-	 * @param unknown_type $url
-	 * @param unknown_type $img
-	 */
-	function create_icon($key, $label, $url)
-	{
-		$this->buttontype = MX_BUTTON_IMAGE;
-
-		switch($this->buttontype)
-		{
-			case MX_BUTTON_TEXT:
-				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
-			break;
-
-			case MX_BUTTON_IMAGE:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->user->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
-			break;
-
-			case MX_BUTTON_GENERIC:
-				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
-			break;
-
-			default:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->user->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
-			break;
-		}
-	}	
-
-	/**
 	 * Enter description here...
 	 *
 	 * @param unknown_type $page_title
@@ -2265,11 +2430,11 @@ class pafiledb_functions extends pafiledb_auth
 				'L_UPLOAD' => $this->user->lang['User_upload'],
 				'L_VIEW_ALL' => $this->user->lang['Viewall'],
 
-				'SEARCH_IMG' => $this->user->img('icon_pa_search', '', false, '', 'src'),
-				'STATS_IMG' => $this->user->img('icon_pa_stats', '', false, '', 'src'),
-				'TOPLIST_IMG' => $this->user->img('icon_pa_toplist', '', false, '', 'src'),
-				'UPLOAD_IMG' => $this->user->img('icon_pa_upload', '', false, '', 'src'),
-				'VIEW_ALL_IMG' => $this->user->img('icon_pa_viewall', '', false, '', 'src'),
+				'SEARCH_IMG' => $this->templates->img('icon_pa_search', '', false, '', 'src'),
+				'STATS_IMG' => $this->templates->img('icon_pa_stats', '', false, '', 'src'),
+				'TOPLIST_IMG' => $this->templates->img('icon_pa_toplist', '', false, '', 'src'),
+				'UPLOAD_IMG' => $this->templates->img('icon_pa_upload', '', false, '', 'src'),
+				'VIEW_ALL_IMG' => $this->templates->img('icon_pa_viewall', '', false, '', 'src'),
 				
 				'MCP_LINK' => $this->user->lang['MCP_title'],
 				'L_NEW_FILE' => 'New File',
@@ -2344,8 +2509,7 @@ class pafiledb_functions extends pafiledb_auth
 	 * Dummy function
 	 */
 	function message_die($msg_code, $msg_text = '', $msg_title = '', $err_line = '', $err_file = '', $sql = '')
-	{
-		
+	{		
 		//
 		// Get SQL error if we are debugging. Do this as soon as possible to prevent
 		// subsequent queries from overwriting the status of sql_error()
@@ -2490,6 +2654,84 @@ class pafiledb_functions extends pafiledb_auth
 	}
 
 	/**
+	 * Create buttons.
+	 *
+	 * You can create code for buttons:
+	 * 1) Simple textlinks (MX_BUTTON_TEXT)
+	 * 2) Standard image links (MX_BUTTON_IMAGE)
+	 * 3) Generic buttons, with spanning text on top background image (MX_BUTTON_GENERIC)
+	 *
+	 * Note: The rollover feature is done using a css shift technique, so you do not need separate images
+	 *
+	 * @param unknown_type $type
+	 * @param unknown_type $label
+	 * @param unknown_type $url
+	 * @param unknown_type $img
+	 */
+	function create_button($key, $label, $url)
+	{
+		$this_buttontype = MX_BUTTON_IMAGE;
+
+		switch($this_buttontype)
+		{
+			case MX_BUTTON_TEXT:
+				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			case MX_BUTTON_IMAGE:
+				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+
+			case MX_BUTTON_GENERIC:
+				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			default:
+				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+		}
+	}
+
+	/**
+	 * Create icons.
+	 *
+	 * You can create code for icons:
+	 * 1) Simple textlinks (MX_BUTTON_TEXT)
+	 * 2) Standard image links (MX_BUTTON_IMAGE)
+	 * 3) Generic buttons, with spanning text on top background image (MX_BUTTON_GENERIC)
+	 *
+	 * Note: The rollover feature is done using a css shift technique, so you do not need separate images
+	 *
+	 * @param unknown_type $type
+	 * @param unknown_type $label
+	 * @param unknown_type $url
+	 * @param unknown_type $img
+	 */
+	function create_icon($key, $label, $url)
+	{
+		$this_buttontype = MX_BUTTON_IMAGE;
+
+		switch($this_buttontype)
+		{
+			case MX_BUTTON_TEXT:
+				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			case MX_BUTTON_IMAGE:
+				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+
+			case MX_BUTTON_GENERIC:
+				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			default:
+				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+		}
+	}
+	
+	/**
 	 * Enter description here...
 	 *
 	 * @param unknown_type $license_id
@@ -2618,7 +2860,7 @@ class pafiledb_functions extends pafiledb_auth
 				}
 				$file_info['message'] .= 'Couldn\'t Upload the File.';
 			}
-			$file_info['url'] = get_formated_url() . '/' . $this->module_root_path . $upload_dir . $this->userfile_name;
+			$file_info['url'] = $this->get_formated_url() . '/' . $this->module_root_path . $upload_dir . $this->userfile_name;
 		}
 		return $file_info;
 	}
@@ -2677,7 +2919,7 @@ class pafiledb_functions extends pafiledb_auth
 	 * @param unknown_type $file_data
 	 * @return unknown
 	 */
-	function get_filesize( $file_id, $file_data = '' )
+	function get_file_size( $file_id, $file_data = '' )
 	{
 		// Read out config values
 		$pafiledb_config = $this->config_values();	
@@ -2703,7 +2945,7 @@ class pafiledb_functions extends pafiledb_auth
 		$file_url = $file_data['file_dlurl'];
 		$file_size = $file_data['file_size'];
 
-		$formated_url = get_formated_url();
+		$formated_url = $this->get_formated_url();
 		$html_path = $formated_url . '/' . $directory;
 		$update_file_size = false;
 
@@ -2851,6 +3093,96 @@ class pafiledb_functions extends pafiledb_auth
 	}
 	
 	/**
+	* Create date/time from format and timezone
+	* from phpBB2
+	 */	
+	function create_date($format, $gmepoch, $tz)
+	{		
+		static $translate;
+		static $midnight;
+		static $date_cache;
+		
+		$this->config['user_timezone'] = !empty($this->config['user_timezone']) ? $this->config['user_timezone'] : $this->config['board_timezone'];
+		$this->data['user_dst'] = !empty($this->data['user_dst']) ? $this->data['user_dst'] : $this->data['user_timezone'];
+		
+		$this->date_format = $this->config['default_dateformat'];
+		$this->timezone = $this->config['user_timezone'] * 3600;
+		$this->dst = $this->data['user_timezone'] * 3600;		
+
+		$format = (!$format) ? $this->user->date_format : $format;
+		$now = time();
+		$delta = $now - $gmepoch;
+
+		if (!isset($date_cache[$format]))
+		{
+			// Is the user requesting a friendly date format (i.e. 'Today 12:42')?
+			$date_cache[$format] = array(
+				'is_short'		=> strpos($format, '|'),
+				'format_short'	=> substr($format, 0, strpos($format, '|')) . '||' . substr(strrchr($format, '|'), 1),
+				'format_long'	=> str_replace('|', '', $format),
+				// Filter out values that are not strings (e.g. arrays) for strtr().
+				'lang'			=> array_filter($this->user->lang['datetime'], 'is_string'),
+			);
+
+			// Short representation of month in format? Some languages use different terms for the long and short format of May
+			if ((strpos($format, '\M') === false && strpos($format, 'M') !== false) || (strpos($format, '\r') === false && strpos($format, 'r') !== false))
+			{
+				$date_cache[$format]['lang']['May'] = $this->user->lang['datetime']['May_short'];
+			}
+		}
+
+		// Zone offset
+		$zone_offset = $this->timezone + $this->dst;
+		
+		// Show date <= 1 hour ago as 'xx min ago' but not greater than 60 seconds in the future
+		// A small tolerence is given for times in the future but in the same minute are displayed as '< than a minute ago'
+		if ($delta <= 3600 && $delta > -60 && ($delta >= -5 || (($now / 60) % 60) == (($gmepoch / 60) % 60)) && $date_cache[$format]['is_short'] !== false && !$forcedate && isset($this->lang['datetime']['AGO']))
+		{
+			return $this->lang(array('datetime', 'AGO'), max(0, (int) floor($delta / 60)));
+		}
+
+		if (!$midnight)
+		{
+			list($d, $m, $y) = explode(' ', gmdate('j n Y', time() + $zone_offset));
+			$midnight = gmmktime(0, 0, 0, $m, $d, $y) - $zone_offset;
+		}
+
+		if ($date_cache[$format]['is_short'] !== false && !$forcedate && !($gmepoch < $midnight - 86400 || $gmepoch > $midnight + 172800))
+		{
+			$day = false;
+
+			if ($gmepoch > $midnight + 86400)
+			{
+				$day = 'TOMORROW';
+			}
+			else if ($gmepoch > $midnight)
+			{
+				$day = 'TODAY';
+			}
+			else if ($gmepoch > $midnight - 86400)
+			{
+				$day = 'YESTERDAY';
+			}
+
+			if ($day !== false)
+			{
+				return str_replace('||', $this->user->lang['datetime'][$day], strtr(@gmdate($date_cache[$format]['format_short'], $gmepoch + $zone_offset), $date_cache[$format]['lang']));
+			}
+		}	
+		
+		if (empty($translate) && $this->templates->decode_lang($this->config['default_lang']) != 'english')
+		{
+			@reset($lang['datetime']);
+			while (list($match, $replace) = @each($lang['datetime']))
+			{
+				$translate[$match] = $replace;
+			}
+		}
+
+		return (is_array($translate)) ? strtr(@gmdate($format, $gmepoch + (3600 * $tz)), $translate) : strtr(@gmdate($format, $gmepoch + (3600 * $tz)), $date_cache[$format]['lang']);
+	}	
+	
+	/**
 	 * Enter description here...
 	 *
 	 * @param unknown_type $args
@@ -2898,7 +3230,24 @@ class pafiledb_functions extends pafiledb_auth
 		}
 		return $mxurl;
 	}	
-	
+
+	/**
+	 * Enter description here...
+	 *
+	 * @return unknown
+	 */
+	function get_formated_url()
+	{
+		$server_protocol = ( $this->config['cookie_secure'] ) ? 'https://' : 'http://';
+		$server_name = preg_replace( '#^\/?(.*?)\/?$#', '\1', trim( $this->config['server_name'] ) );
+		$server_port = ( $board_config['server_port'] <> 80 ) ? ':' . trim( $this->config['server_port'] ) : '';
+
+		$formated_url = $server_protocol . $server_name . $server_port;
+		
+		$formated_url = function_exists('generate_board_url') ? generate_board_url() . '/' : $formated_url;
+		
+		return $formated_url;
+	}	
 	/**
 	* Post download announcement
 	*/

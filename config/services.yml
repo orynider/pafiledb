@@ -47,6 +47,7 @@ services:
             - '@orynider.pafiledb.core.pafiledb_templates'
             - '@cache.driver'
             - '@orynider.pafiledb.core.pafiledb_cache'
+            - '@orynider.pafiledb.core.custom_field'			
             - '@template'
             - '@user'
             - '@auth'
@@ -61,8 +62,10 @@ services:
             - '%core.root_path%'
             - '%orynider.pafiledb.table.pa_files%'
             - '%orynider.pafiledb.table.pa_cat%'
-            - '%orynider.pafiledb.table.pa_auth_access%'
             - '%orynider.pafiledb.table.pa_config%'
+            - '%orynider.pafiledb.table.pa_votes%'
+            - '%orynider.pafiledb.table.pa_comments%'
+            - '%orynider.pafiledb.table.pa_license%'
     orynider.pafiledb.controller.cat:
         class: orynider\pafiledb\controller\pafiledb_category
         arguments:
@@ -121,7 +124,6 @@ services:
     orynider.pafiledb.core.pafiledb_templates:
         class: orynider\pafiledb\core\pafiledb_templates
         arguments:
-            - '@orynider.pafiledb.core.pafiledb_functions'
             - '@template'
             - '@user'
             - '@dbal.conn'
@@ -160,8 +162,10 @@ services:
             - '@dbal.conn'
             - '@controller.helper'
             - '@request'
+            - '@auth'			
             - '@cache.driver'
             - '@orynider.pafiledb.core.pafiledb_cache'
+            - '@orynider.pafiledb.core.pafiledb_templates'			
             - '@config'
             - '@pagination'
             - '@ext.manager'

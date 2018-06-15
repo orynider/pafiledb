@@ -35,6 +35,57 @@ if (empty($lang) || !is_array($lang))
 
 $lang = array_merge($lang, array(
 	//
+	// General
+	//
+	'Category'							=>	'Category',
+	'Error_no_download'					=>	'The selected File does not exist anymore',
+	'Options'							=>	'Options',
+	'Click_return'						=>	'Click %sHere%s to return to the previous page',
+	'Click_here'						=>	'Click Here',
+	'never'								=>	'None',
+	'pafiledb_disable'					=>	'Download Database is disabled',
+	'jump'								=>	'Select a category',
+	'viewall_disabled'					=>	'This feature is disabled by the admin.',
+	'New_file'							=>	'New file',
+	'No_new_file'						=>	'No new file',
+	'None'								=>	'None',
+	'No_file'							=>	'No Files',
+	'View_latest_file'					=>	'View Latest File',
+
+	//
+	// Return
+	//
+	'Click_return'						=>	'Click %sHere%s to return to the previous page',
+
+	//
+	// Main
+	//
+	'Files'									=>	'Files',
+	'Viewall'								=>	'View All Files',
+	'Vainfo'								=>	'View all of the files in the database',
+	'Quick_nav'								=>	'Quick Navigation',
+	'Quick_jump'							=>	'Select Category',
+	'Quick_go'								=>	'Go',
+	'Sub_category'							=>	'Sub Category',
+	'Last_file'								=>	'Last File',
+
+	//
+	// Sort
+	//
+	'Sort'								=>	'Sort',
+	'Name'								=>	'Name',
+	'Update_time'						=>	'Last Updated',
+
+	//
+	// Category
+	//
+	'No_files'							=>	'No files found',
+	'No_files_cat'						=>	'There are no files in this category.',
+	'Cat_not_exist'						=>	'The category you selected does not exist.',
+	'File_not_exist'					=>	'The file you selected does not exist.',
+	'License_not_exist'					=>	'The license you selected does not exist.',
+
+	//
 	// File
 	//
 	'FILE_TITLE'							=> 'Filename',
@@ -133,6 +184,32 @@ $lang = array_merge($lang, array(
 	'FILES_NEW_DOWNLOAD_SIZE'				=> 'The maximum size of the file is <strong>%1$s %2$s</strong>! Due to the upload time you might need, this value can be lower!',
 	'FILES_SUBCAT_FILE'						=> '1 file',
 	'FILES_SUBCAT_FILES'					=> '%1$d files',
+	
+	//
+	// User Upload
+	//
+	'User_upload'					=> 'User Upload',
+
+	//
+	// License
+	//
+	'License'						=> 'License Agreement',
+	'Licensewarn'					=> 'You must agree to this license agreement to download',
+	'Iagree'						=> 'I Agree',
+	'Dontagree'						=> 'I Dont Agree',
+
+	//
+	// Search
+	//
+	'Search'						=> 'Search',
+	'Search_for'					=> 'Search for',
+	'Results'						=> 'Results for',
+	'No_matches'					=> 'Sorry, no matches were found for',
+	'Matches'						=> 'matches were found for',
+	'All'							=> 'All Categories',
+	'Choose_cat'					=> 'Choose Category:',
+	'Include_comments'				=> 'Include Comments',
+	'Submiter'						=> 'Submited by',	
 	
 	//
 	// ACP
