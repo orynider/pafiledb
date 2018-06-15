@@ -91,6 +91,24 @@ class pafiledb_functions extends pafiledb_auth
 
 	/** @var string phpBB root path */
 	protected $root_path;
+	
+	/** @var string */	
+	var $cat_rowset;
+	
+	/** @var string */	
+	var $subcat_rowset;
+	
+	/** @var string */	
+	var $comments;
+	
+	/** @var string */	
+	var $ratings;
+	
+	/** @var string */	
+	var $information;
+	
+	/** @var string */	
+	var $notification;	
 
 	/**
 	* The database tables
@@ -231,7 +249,7 @@ class pafiledb_functions extends pafiledb_auth
 		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
 		{
 			//print_r($this->auth_user[$cat_rowset[$i]['cat_id']]);
-			if ( $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
+			if ( $this->auth->acl_get('u_pa_files_download') || $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
 			{
 				$this->cat_rowset[$cat_rowset[$i]['cat_id']] = $cat_rowset[$i];
 				$this->subcat_rowset[$cat_rowset[$i]['cat_parent']][$cat_rowset[$i]['cat_id']] = $cat_rowset[$i];
