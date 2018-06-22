@@ -18,7 +18,7 @@ use phpbb\exception\http_exception;
 @define('PA_CAT_ALLOW_FILE', 1);
 @define('FILE_PINNED', 1);
 
-class pafiledb_category
+class pafiledb_category extends \orynider\pafiledb\core\pafiledb_public
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
@@ -71,7 +71,7 @@ class pafiledb_category
 	* @param \orynider\pafiledb\core\functions			$functions
 	
 	
-	* @param \phpbb\template\template		 		$template
+	* @param \phpbb\template\pafiledb		 		$template
 	* @param \phpbb\user						$user
 	* @param \phpbb\auth\auth					$auth
 	* @param \phpbb\db\driver\driver_interface		$db
@@ -85,7 +85,7 @@ class pafiledb_category
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,	
+		\orynider\pafiledb\core\pafiledb $functions,	
 		\orynider\pafiledb\core\pafiledb_templates $pafiledb_templates,
 		\phpbb\cache\driver\driver_interface $cache,		
 		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,		
@@ -415,8 +415,7 @@ class pafiledb_category
 				$file_time 			= $row['file_time'];
 				$file_update_time 	= $row['file_update_time'];
 				$file_size			= $row['file_size'] > 1048576 ? round($row['file_size'] / 1048576, 2) . ' MB' : round($row['file_size'] / 1024) . ' kB';
-				
-				
+							
 				// ===================================================
 				// Get the post icon fot this file
 				// ===================================================
@@ -424,17 +423,21 @@ class pafiledb_category
 				{
 					if ( $row['file_posticon'] == 'none' || $row['file_posticon'] == 'pa_no_posticon' || $row['file_posticon'] == 'none.gif' )
 					{
-						$posticon = $this->templates->img('pa_no_posticon', $this->user->lang['FILES_POSTICON'], false, '', 'src');
+						$posticon 			= $this->templates->img('pa_no_posticon', $this->user->lang['FILES_NO_POSTICON'], false, '', 'src');
+						$posticon_full_tag	= $this->templates->img('pa_no_posticon', $this->user->lang['FILES_NO_POSTICON'], false, '', 'full_tag');					
 					}
 					else
 					{
-						$posticon = empty($row['file_posticon']) ? $this->templates->img($pa_folder_image, '', false, '', 'src') : $this->module_root_path . ICONS_DIR . $row['file_posticon'];
+						$posticon 			= empty($row['file_posticon']) ? $this->templates->img($pa_folder_image, $this->user->lang['FILES_POSTICON'], false, '', 'src') : $this->module_root_path . ICONS_DIR . $row['file_posticon'];
+						$posticon_full_tag 	= empty($row['file_posticon']) ? $this->templates->img($pa_folder_image, $this->user->lang['FILES_POSTICON'], false, '', 'full_tag') :  '<img src="'.$posticon.'" alt="'.$this->user->lang['TOPIC_ICON'].'" title="'.$this->user->lang['TOPIC_ICON'].'" border="0" />';						
 					}
 				}
 				else
 				{
-					$posticon = $this->templates->img('sticky_read', '', false, '', 'src');
-				}				
+					//sticky_read or folder_sticky
+					$posticon 				= $this->templates->img('folder_sticky', $this->user->lang('POST_STICKY'), false, '', 'src');
+					$posticon_full_tag		= $this->templates->img('folder_sticky', $this->user->lang('POST_STICKY'), false, '23', 'full_tag');
+				}								
 				
 				//
 				// Define the little post icon
@@ -474,7 +477,8 @@ class pafiledb_category
 
 				$this->template->assign_block_vars('files_row', array(				
 					'U_FILE'			=> print_r($file_url, true),					
-					'PIN_IMAGE' 		=> $posticon,					
+					'PIN_IMAGE' 		=> $posticon,
+					'PIN_IMAGE_TAG' 	=> $posticon_full_tag,					
 					'FILE_TITLE'		=> $file_name,
 					'FILE_VERSION'		=> $file_version,
 					'FILE_CLICKS'		=> $file_clicks,

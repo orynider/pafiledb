@@ -11,10 +11,13 @@ namespace orynider\pafiledb\controller;
 
 use phpbb\exception\http_exception;
 
-class pafiledb_user_upload
+class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
+	
+	/** @var \orynider\pafiledb\core\custom_field */	
+	protected $custom_field;	
 
 	/** @var \phpbb\template\template */
 	protected $template;
@@ -57,32 +60,41 @@ class pafiledb_user_upload
 	protected $pa_files_table;
 
 	protected $pa_cat_table;
+	
+	protected $custom_table;
+	
+	protected $custom_data_table;		
 
 	/** @var \phpbb\files\factory */
 	protected $files_factory;
+	
 
 	/**
 	* Constructor
 	*
-	* @param \orynider\pafiledb\core\functions					$functions
-	* @param \phpbb\template\template		 				$template
+	* @param \orynider\pafiledb\core\functions				$functions
+	* @param \orynider\pafiledb\core\custom_field				$custom_field	
+	* @param \phpbb\template\pafiledb		 				$template
 	* @param \phpbb\user								$user
 	* @param \phpbb\auth\auth							$auth
 	* @param \phpbb\log								$log
 	* @param \phpbb\db\driver\driver_interface				$db
 	* @param \phpbb\controller\helper		 				$helper
 	* @param \phpbb\request\request		 				$request
-	* @param \phpbb\extension\manager						$ext_manager
+	* @param \phpbb\extension\manager					$ext_manager
 	* @param \phpbb\path_helper							$path_helper
 	* @param string 									$php_ext
 	* @param string 									$root_path
 	* @param string 									$pa_files_table
 	* @param string 									$pa_cat_table
-	* @param \phpbb\files\factory							$files_factory
+	* @param string 									$custom_table
+	* @param string 									$custom_data_table	
+	* @param \phpbb\files\factory						$files_factory
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		\orynider\pafiledb\core\pafiledb $functions,
+		\orynider\pafiledb\core\custom_field $custom_field,			
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\auth\auth $auth,
@@ -95,9 +107,12 @@ class pafiledb_user_upload
 		$php_ext, $root_path,
 		$pa_files_table,
 		$pa_cat_table,
+		$custom_table,
+		$custom_data_table,		
 		\phpbb\files\factory $files_factory = null)
 	{
 		$this->functions 			= $functions;
+		$this->custom_field 		= $custom_field;		
 		$this->template 			= $template;
 		$this->user 				= $user;
 		$this->auth 				= $auth;
@@ -111,6 +126,8 @@ class pafiledb_user_upload
 		$this->root_path 			= $root_path;
 		$this->pa_files_table 		= $pa_files_table;
 		$this->pa_cat_table 		= $pa_cat_table;
+		$this->custom_table 		= $custom_table;
+		$this->custom_data_table 	= $custom_data_table;		
 		$this->files_factory 		= $files_factory;
 		
 		$this->ext_path 			= $this->ext_manager->get_extension_path('orynider/pafiledb', true);
@@ -132,10 +149,26 @@ class pafiledb_user_upload
 		{
 			throw new http_exception(401, 'FILES_NO_UPLOAD');
 		}
-
+		
+		if(!is_object($mx_block))
+		{
+			global $phpbb_container;
+			/* @var $phpbb_content_visibility \phpbb\content_visibility */
+			$mx_block = $phpbb_container->get('content.visibility');
+		}		
+		
+		//
+		// Go full page
+		//
+		$mx_block->full_page = true;		
+		
 		// Read out config values
 		$pafiledb_config = $this->functions->config_values();
-
+		
+		// =======================================================
+		// Request vars
+		// =======================================================
+		$cat_id 		= $this->request->variable('cat_id', 0);
 		$file_id		= $this->request->variable('file_id', 0);
 		$title			= $this->request->variable('title', '', true);
 		$cat_name_show	= $this->request->variable('cat_name_show', 1);
@@ -146,6 +179,9 @@ class pafiledb_user_upload
 		$cat_option 	= $this->request->variable('parent', '', true);
 		$ftp_upload		= $this->request->variable('ftp_upload', '', true);
 
+		$do = ($this->request->is_set('do')) ? intval($this->request->variable('do', '', true)) : '';
+		$mirrors = ($this->request->is_set_post('mirrors')) ? true : 0;			
+		
 		$uid = $bitfield = $options = '';
 		$allow_bbcode = $allow_urls = $allow_smilies = true;
 
@@ -162,7 +198,81 @@ class pafiledb_user_upload
 		add_form_key('add_upload');
 
 		$this->user->add_lang('posting');
+		
+		//
+		// Main Auth
+		//
+		if ( !empty( $cat_id ) )
+		{
+			if ( !$this->auth_user[$cat_id]['auth_upload'] )
+			{
+				$message = sprintf( $lang['Sorry_auth_upload'], $this->auth_user[$cat_id]['auth_upload_type'] );
+			}
+		}
+		else
+		{
+			$dropmenu = ( !$cat_id ) ? $this->generate_jumpbox( 0, 0, '', true, true, 'auth_upload' ) : $this->generate_jumpbox( 0, 0, array( $cat_id => 1 ), true, true, 'auth_upload' );
 
+			if ( empty( $dropmenu ) )
+			{
+				$message = sprintf( $lang['Sorry_auth_upload'], $this->auth_user[$cat_id]['auth_upload_type'] );
+			}
+		}		
+		
+		//
+		// Not authorized? Output nice message and die.
+		//
+		if (!empty($message))
+		{
+			$this->functions->message_die( GENERAL_MESSAGE, $message );
+		}
+		
+		//
+		// Load file info...if file_id is set
+		//
+		if ( $file_id )
+		{
+			$sql = 'SELECT *
+				FROM ' . $this->pa_files_table . "
+				WHERE file_id = '".$file_id."'";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt query File data', '', __LINE__, __FILE__, $sql );
+			}
+
+			$file_data = $this->db->sql_fetchrow( $result );
+			$cat_id = $file_data['file_catid'];
+
+			$this->db->sql_freeresult( $result );
+		}
+
+		//
+		// Further security.
+		// Reset vars if no related data exist.
+		//
+		if ( $file_id && !$cat_id )
+		{
+			$file_id = 0;
+		}
+
+		if ( $cat_id && !$this->cat_rowset[$cat_id]['cat_id'] )
+		{
+			$cat_id = 0;
+		}
+
+		//
+		// Load custom fields
+		//
+		$custom_field = new \orynider\pafiledb\core\custom_field($this->functions,
+		$this->template,
+		$this->user,
+		$this->db,
+		$this->request,
+		$this->custom_table,
+		$this->custom_data_table);
+		$custom_field->init();		
+		
 		if ($this->request->is_set_post('submit'))
 		{
 			$filecheck = $multiplier = '';
@@ -198,7 +308,7 @@ class pafiledb_user_upload
 			$target = $row['cat_sub_dir'];
 			$this->db->sql_freeresult($result);
 
-			$upload_dir = $this->ext_path . 'uploads/' . $target;
+			$upload_dir = $this->ext_path . 'pafiledb/uploads/' . $target;
 
 			if (!$ftp_upload)
 			{
@@ -217,7 +327,7 @@ class pafiledb_user_upload
 				}
 
 				$upload_file->move_file($upload_dir, false, false, false);
-				@chmod($this->ext_path_web . 'pafiledb/' . $upload_file->get('uploadname'), 0644);
+				@chmod($this->ext_path_web . 'pafiledb/uploads/' . $upload_file->get('uploadname'), 0644);
 
 				if (sizeof($upload_file->error) && $upload_file->get('uploadname'))
 				{

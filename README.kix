@@ -1,0 +1,57 @@
+[color=purple][size=120][b]Extension Name:[/b][/size][/color] pafileDB Download Manager
+    [color=purple][size=120][b]Author:[/b][/size][/color] 
+	[url=http://www.phpbb.com/community/memberlist.php?mode=viewprofile&u=orynider][b]Author Username[/b][/url]
+
+    [color=purple][size=120][b]Extension Description:[/b][/size][/color] 
+	Full featured File Manager with for example commenting, ratings, etc. Also nice blocks to list latest files and quick downloads.
+
+   
+   [color=purple][size=120][b]Extension Version:[/b][/size][/color] 0.9.0-dev
+
+    [color=purple][size=120][b]Requirements:[/b][/size][/color]       
+		"php": ">=5.3.3",
+        "phpbb/phpbb": ">=3.1.0"
+
+    [color=purple][size=120][b]Features/Request:[/b][/size][/color] 
+	Feature List. Use the 
+	[list]
+	[/list] 
+	
+
+    [color=purple][size=120][b]Screenshots:[/b][/size][/color] 
+	[img][/img]
+
+    [color=purple][size=120][b]Extension Download:[/b][/size][/color] 
+	[url]https://github.com/orynider/pafiledb[/url]
+
+    [color=purple][size=120][b]Extension To Do:[/b][/size][/color]
+[list=To do]
+[/list]
+
+[color=purple][size=120][b]Authors Notes:[/b][/size][/color]
+pafileDB Download Manager for phpBB and MXP-CMS
+(based on https://www.phpbb.com/community/viewtopic.php?t=56035 
+and https://www.phpbb.com/community/viewtopic.php?t=567227
+and https://www.phpbb.com/community/viewtopic.php?t=2421316
+and https://www.phpbb.com/community/viewtopic.php?f=456&t=2344506)
+[color=purple][size=120][b]Author [Credits]:[/b][/size][/color]
+Mohd Basri (u=19235), PHP Arena, Jon Ohlsson (jonohlsson@hotmail.com) aka Haplo (u=18724), dmzx (u=1427761), FlorinCB aka orynider (u=217732)
+(https://sourceforge.net/p/mxpcms/svn/HEAD/tree/orynider/pafiledb/)
+
+[color=purple][size=120][b]Features:[/b][/size][/color]
+Full featured File Manager with for example commenting, ratings, etc. Also nice blocks to list latest files and quick downloads.
+
+[color=purple][size=120][b]Install:[/b][/size][/color]
+1. Download the latest release.
+2. In the `ext` directory of your phpBB board, create a new directory named `orynider` (if it does not already exist).
+3. Copy the `pafiledb` folder to `phpBB/ext/orynider/` (if done correctly, you`ll have the main extension class at (your forum root)/ext/orynider/pafiledb/composer.json).
+4. Navigate in the ACP to `Customise -> Manage extensions`.
+5. Look for `Download Manager` under the Disabled Extensions list, and click its `Enable` link.
+
+[color=purple][size=120][b]Uninstall:[/b][/size][/color]
+1. Navigate in the ACP to `Customise -> Extension Management -> Extensions`.
+2. Look for `Download Manager` under the Enabled Extensions list, and click its `Disable` link.
+3. To permanently uninstall, click `Delete Data` and then delete the `/ext/orynider/pafiledb` folder.
+
+[color=purple][size=120][b]License:[/b][/size][/color]
+[GNU General Public License v2](http://opensource.org/licenses/GPL-2.0)

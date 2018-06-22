@@ -6,7 +6,22 @@ orynider_pafiledb_controller_cat:
     defaults: { _controller: orynider.pafiledb.controller.cat:handle_category }
 orynider_pafiledb_controller_file:
     path: /file
-    defaults: { _controller: orynider.pafiledb.controller.file:handle_file }	
+    defaults: { _controller: orynider.pafiledb.controller.file:handle_file }
+orynider_pafiledb_controller_toplist:
+    path: /toplist
+    defaults: { _controller: orynider.pafiledb.controller.toplist:handle_toplist }
+orynider_pafiledb_controller_stats:
+    path: /stats
+    defaults: { _controller: orynider.pafiledb.controller.stats:handle_stats }
+orynider_pafiledb_controller_search:
+    path: /search
+    defaults: { _controller: orynider.pafiledb.controller.search:handle_search }
+orynider_pafiledb_controller_viewall:
+    path: /viewall
+    defaults: { _controller: orynider.pafiledb.controller.viewall:handle_viewall }
+orynider_pafiledb_controller_mcp:
+    path: /mcp
+    defaults: { _controller: orynider.pafiledb.controller.mcp:handle_mcp }	
 orynider_pafiledb_controller_download:
     path: /dload
     defaults: { _controller: orynider.pafiledb.controller.download:handle_download }

@@ -11,7 +11,7 @@ namespace orynider\pafiledb\controller;
 
 use phpbb\exception\http_exception;
 
-class pafiledb
+class pafiledb extends \orynider\pafiledb\core\pafiledb_public
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
@@ -34,7 +34,7 @@ class pafiledb
 	/**
 	* Constructor
 	*
-	* @param \orynider\pafiledb\core\functions					$functions
+	* @param \orynider\pafiledb\core\pafiledb					$functions
 	* @param \phpbb\template\template		 				$template
 	* @param \phpbb\user								$user
 	* @param \phpbb\auth\auth							$auth
@@ -43,7 +43,7 @@ class pafiledb
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		\orynider\pafiledb\core\pafiledb $functions,
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\auth\auth $auth,

@@ -30,8 +30,9 @@ class custom_field
 	var $field_rowset = array();
 	var $field_data_rowset = array();
 
-	var $custom_table = PA_CUSTOM_TABLE;
-	var $custom_data_table = PA_CUSTOM_DATA_TABLE;
+	protected $custom_table;
+	
+	protected $custom_data_table;
 	
 	/**
 	* Constructor
@@ -46,7 +47,7 @@ class custom_field
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		\orynider\pafiledb\core\pafiledb $functions,
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\db\driver\driver_interface $db,

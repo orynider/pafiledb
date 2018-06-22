@@ -9,7 +9,28 @@
 
 namespace orynider\pafiledb\controller;
 
-class admin_controller
+// Auth settings (blockCP)
+!defined('AUTH_LIST_ALL') ? define('AUTH_LIST_ALL', 0) : false;
+!defined('AUTH_ALL') ? define('AUTH_ALL', 0) : false;
+!defined('AUTH_REG') ? define('AUTH_REG', 1) : false;
+!defined('AUTH_ACL') ? define('AUTH_ACL', 2) : false;
+!defined('AUTH_MOD') ? define('AUTH_MOD', 3) : false;
+!defined('AUTH_ADMIN') ? define('AUTH_ADMIN', 5) : false;
+!defined('AUTH_ANONYMOUS') ? define('AUTH_ANONYMOUS', 9) : false;
+
+!defined('AUTH_VIEW') ? define('AUTH_VIEW', 1) : false;
+!defined('AUTH_READ') ? define('AUTH_READ', 2) : false;
+!defined('AUTH_POST') ? define('AUTH_POST', 3) : false;
+!defined('AUTH_REPLY') ? define('AUTH_REPLY', 4) : false;
+!defined('AUTH_EDIT') ? define('AUTH_EDIT', 5) : false;
+!defined('AUTH_DELETE') ? define('AUTH_DELETE', 6) : false;
+!defined('AUTH_ANNOUNCE') ? define('AUTH_ANNOUNCE', 7) : false;
+!defined('AUTH_STICKY') ? define('AUTH_STICKY', 8) : false;
+!defined('AUTH_POLLCREATE') ? define('AUTH_POLLCREATE', 9) : false;
+!defined('AUTH_VOTE') ? define('AUTH_VOTE', 10) : false;
+!defined('AUTH_ATTACH') ? define('AUTH_ATTACH', 11) : false;
+
+class admin_controller extends \orynider\pafiledb\core\pafiledb_auth
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
@@ -108,7 +129,7 @@ class admin_controller
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		\orynider\pafiledb\core\pafiledb $functions,
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		\phpbb\log\log $log,
@@ -158,6 +179,9 @@ class admin_controller
 		}
 		
 		global $debug;
+		
+		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
+		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
 
 		$this->cat_rowset = $this->functions->cat_rowset;
 		$this->subcat_rowset = $this->functions->subcat_rowset;
@@ -169,7 +193,7 @@ class admin_controller
 		// Read out config values
 		$pafiledb_config = $this->functions->config_values();
 		$this->backend = $this->functions->confirm_backend();
-
+		
 		//print_r($this->cat_rowset);						
 	}
 
@@ -3834,26 +3858,33 @@ class admin_controller
 		return $auth_user;
 	}
 
-	function is_moderator( $group_id )
+	function is_moderator($group_id = 0)
 	{
-		static $is_mod = false;
-
-		if ( $is_mod !== false )
+		if (!empty($this->auth_user) && ($group_id == 0))
 		{
-			return $is_mod;
+			foreach( $this->auth_user as $cat_id => $this->auth_fields )
+			{
+				if ( $this->auth_fileds['auth_mod'] )
+				{
+					return true;
+				}
+			}
+			return false;
 		}
+		elseif ($group_id !== 0)
+		{		
+			$sql = "SELECT *
+				FROM " . $this->pa_auth_access_table . "
+				WHERE group_id = $group_id
+				AND auth_mod = '1'";
 
-		$sql = "SELECT *
-			FROM " . PA_AUTH_ACCESS_TABLE . "
-			WHERE group_id = $group_id
-			AND auth_mod = '1'";
-
-		if ( !( $result = $this->db->sql_query( $sql ) ) )
-		{
-			$this->functions->message_die( GENERAL_ERROR, "Couldn't check for moderator $sql", "", __LINE__, __FILE__, $sql );
+			if ( !($result = $this->db->sql_query($sql)) )
+			{
+				$this->functions->message_die(GENERAL_ERROR, "Couldn't check for moderator $sql", "", __LINE__, __FILE__, $sql);
+			}
+			return ($is_mod = ($this->db->sql_fetchrow($result)) ? 1 : 0);			
 		}
-
-		return ( $is_mod = ( $this->db->sql_fetchrow( $result ) ) ? 1 : 0 );
+		return false;		
 	}
 
 	/**

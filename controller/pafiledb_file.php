@@ -15,7 +15,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Enter description here...
  *
  */
-class pafiledb_file
+class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 {
 	/** @var \orynider\pafiledb\core\functions */
 	protected $functions;
@@ -83,32 +83,32 @@ class pafiledb_file
 	* Constructor
 	*
 	* @param \orynider\pafiledb\core\functions			$functions
-	* @param \orynider\pafiledb\core\pafiledb_templates	$pafiledb_templates	
+	* @param \orynider\pafiledb\core\pafiledb_templates		$pafiledb_templates	
 	* @param \phpbb\cache\service					$cache
 	* @param \orynider\pafiledb\core\pafiledb_cache		$pafiledb_cache
-	* @param \orynider\pafiledb\core\custom_field		$custom_field	
-	* @param \phpbb\template\template		 		$template
-	* @param \phpbb\user						$user
-	* @param \phpbb\auth\auth					$auth
-	* @param \phpbb\db\driver\driver_interface		$db
-	* @param \phpbb\request\request		 		$request
-	* @param \phpbb\controller\helper		 		$helper
+	* @param \orynider\pafiledb\core\custom_field			$custom_field	
+	* @param \phpbb\template\template		 			$template
+	* @param \phpbb\user							$user
+	* @param \phpbb\auth\auth						$auth
+	* @param \phpbb\db\driver\driver_interface			$db
+	* @param \phpbb\request\request		 			$request
+	* @param \phpbb\controller\helper		 			$helper
 	* @param \phpbb\config\config					$config
-	* @param ContainerInterface                    			$container
-	* @param \phpbb\pagination					$pagination
+	* @param ContainerInterface                    				$container
+	* @param \phpbb\pagination						$pagination
 	* @param \phpbb\extension\manager 				$extension_manager
-	* @param string							$php_ext
-	* @param string							$root_path
-	* @param								$pa_files_table
-	* @param								$pa_cat_table
-	* @param								$pa_config_table
-	* @param								$pa_votes_table
-	* @param								$pa_comments_table
-	* @param								$pa_license_table	
+	* @param string								$php_ext
+	* @param string								$root_path
+	* @param									$pa_files_table
+	* @param									$pa_cat_table
+	* @param									$pa_config_table
+	* @param									$pa_votes_table
+	* @param									$pa_comments_table
+	* @param									$pa_license_table	
 	*
 	*/
 	public function __construct(
-		\orynider\pafiledb\core\pafiledb_functions $functions,
+		\orynider\pafiledb\core\pafiledb $functions,
 		\orynider\pafiledb\core\pafiledb_templates $pafiledb_templates,
 		\phpbb\cache\driver\driver_interface $cache,
 		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,
@@ -255,6 +255,8 @@ class pafiledb_file
 			$this->functions->message_die( GENERAL_MESSAGE, $message );
 		}
 		
+		//$auth_download = $this->functions->auth_user[$file_data['file_catid']]['auth_download'];
+		
 		$cat_data = $this->functions->get_cat_info($file_data['file_catid']);
 		
 		/**
@@ -282,7 +284,9 @@ class pafiledb_file
 		$file_version = trim( $file_data['file_version'] );
 		$file_screenshot_url = trim( $file_data['file_ssurl'] );
 		$file_website_url = trim( $file_data['file_docsurl'] );
-		$file_download_link = ( $file_data['file_license'] > 0 ) ? append_sid($this->helper->route('orynider_pafiledb_controller_license', array('license_id' =>	$file_data['file_license'], 'file_id' =>	$file_id )) ) : append_sid($this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id)));
+		$file_download_url = $this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id));								
+		$file_view_url = $this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id));		
+		$file_download_link = ( $file_data['file_license'] > 0 ) ? append_sid($this->helper->route('orynider_pafiledb_controller_license', array('license_id' =>	$file_data['file_license'], 'file_id' =>	$file_id )) ) : append_sid($this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id)));
 		$file_size = $this->functions->get_file_size( $file_id, $file_data );
 
 		$file_poster = ( $file_data['user_id'] != ANONYMOUS ) ? '<a href="' . append_sid("{$this->root_path}{$memberlist}.{$this->php_ext}?mode=viewprofile&amp;action=view&amp;u={$file_data['user_id']}") . '">' : '';
@@ -362,8 +366,8 @@ class pafiledb_file
 			'LAST' => $file_last_download,
 
 			'U_DOWNLOAD' => $file_download_link,
-			'U_DELETE' => append_sid( $this->functions->mxurl( 'action=user_upload&do=delete&file_id=' . $file_id ) ),
-			'U_EDIT' => append_sid( $this->functions->mxurl( 'action=user_upload&file_id=' . $file_id ) ),
+			'U_DELETE' => append_sid($this->helper->route('orynider_pafiledb_controller_upload', array('do' => 'delete', 'file_id' => $file_id))),
+			'U_EDIT' => append_sid($this->helper->route('orynider_pafiledb_controller_upload', array('file_id' => $file_id))),
 			'U_EMAIL' => append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ) ),
 
 			// Buttons
@@ -440,21 +444,22 @@ class pafiledb_file
 		//
 		$this->functions->auth_can($file_data['file_catid']);
 		
-		//		
-		// Build navigation link
-		//		
-		$this->template->assign_block_vars('navlinks', array(
-			'FORUM_NAME'	=> $this->user->lang('FILES_DOWNLOADS'),
-			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller'),
-		));
+
 
 		$this->functions->assign_authors();
 		$this->template->assign_var('PAFILEDB_FOOTER_VIEW', true);
 		
+
 		//
 		// Output all
 		//
-		return $this->helper->render('pa_file_body.html', $this->user->lang('FILES_TITLE') . ' &bull; ' . $file_data['file_name']);		
+		$tpl_name = 'pa_file_body.html';
+		$page_title = $this->user->lang('FILES_TITLE');
+		//$this->display($lang['Download'], 'pa_file_body.html');
+		$this->functions->page_header( $page_title );
+		$this->template->set_filenames( array( 'body' => $tpl_name ) );
+		$this->functions->page_footer();		
+		return $this->helper->render($tpl_name, $page_title . ' &bull; ' . $file_data['file_name']);		
 	}
 }
 ?>

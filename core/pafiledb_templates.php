@@ -290,10 +290,10 @@ class pafiledb_templates
 			$this->imageset_path = '/imageset/'; //Olympus ImageSet
 			$this->img_lang = (file_exists($this->phpbb_root_path . $this->template_path . $this->template_name . $this->imageset_path . $this->lang_iso)) ? $this->lang_iso : $this->default_language;
 			$this->img_lang_dir = $this->img_lang;
-			$this->imageset_backend = 'olympus';		
+			$this->imageset_backend = 'olympus';
 		}
 		elseif (@is_dir("{$this->phpbb_root_path}{$this->template_path}{$this->template_name}/theme/images/"))
-		{
+		{			
 			$this->imageset_path = '/theme/images/';  //phpBB3 Images
 			if ((@is_dir("{$this->phpbb_root_path}{$this->template_path}{$this->template_name}/theme/lang_{$this->user_language_name}")) || (@is_dir("{$this->phpbb_root_path}{$this->template_path}{$this->template_name}/theme/lang_{$this->default_language_name}")))
 			{
@@ -315,7 +315,7 @@ class pafiledb_templates
 			$this->img_lang_dir = 'lang_' . $this->img_lang;
 			$this->imageset_backend = 'phpbb2';	
 		}
-		
+				
 		//		
 		// Olympus image sets main images
 		//		
@@ -490,7 +490,8 @@ class pafiledb_templates
 			}
 				
 			$current_template_images = $this->current_template_images;
-			
+			//die($this->imageset_path);
+			//die($current_template_images);			
 			$images['icon_quote'] = "$current_template_images/{LANG}/" . $this->img('icon_post_quote.gif', '', '', '', 'filename');
 			$images['icon_edit'] = "$current_template_images/{LANG}/" . $this->img('icon_post_edit.gif', '', '', '', 'filename');			
 			$images['icon_search'] = "$current_template_images/{LANG}/" . $this->img('icon_user_search.gif', '', '', '', 'filename');
@@ -525,11 +526,11 @@ class pafiledb_templates
 			$images['folder_hot_new'] = "$current_template_images/" . $this->img('topic_unread_hot.gif', '', '', '', 'filename');
 			$images['folder_locked'] = "$current_template_images/" . $this->img('topic_read_locked.gif', '', '', '', 'filename');
 			$images['folder_locked_new'] = "$current_template_images/" . $this->img('topic_unread_locked.gif', '', '', '', 'filename');
-			$images['folder_sticky'] = "$current_template_images/" . $this->img('topic_read_mine.gif', '', '', '', 'filename');
-			$images['folder_sticky_new'] = "$current_template_images/" . $this->img('topic_unread_mine.gif', '', '', '', 'filename');
+			$images['folder_sticky'] = "$current_template_images/" . $this->img('sticky_read_mine.gif', '', '', '', 'filename');
+			$images['folder_sticky_new'] = "$current_template_images/" . $this->img('sticky_unread_mine.gif', '', '', '', 'filename');
 			$images['folder_announce'] = "$current_template_images/" . $this->img('announce_read.gif', '', '', '', 'filename');
 			$images['folder_announce_new'] = "$current_template_images/" . $this->img('announce_unread.gif', '', '', '', 'filename');
-
+			
 			$images['post_new'] = "$current_template_images/{LANG}/" . $this->img('button_topic_new.gif', '', '', '', 'filename');
 			$images['post_locked'] = "$current_template_images/{LANG}/" . $this->img('button_topic_locked.gif', '', '', '', 'filename');
 			$images['reply_new'] = "$current_template_images/{LANG}/" . $this->img('button_topic_reply.gif', '', '', '', 'filename');
@@ -561,6 +562,49 @@ class pafiledb_templates
 			$images['voting_graphic'][2] = "$current_template_images/voting_bar.gif";
 			$images['voting_graphic'][3] = "$current_template_images/voting_bar.gif";
 			$images['voting_graphic'][4] = "$current_template_images/voting_bar.gif";
+			
+			//
+			// Import phpBB Graphics, prefix with PHPBB_URL, and apply LANG info
+			//
+			while( list($key, $value) = @each($images) )
+			{
+				if (is_array($value))
+				{
+					foreach( $value as $key2 => $val2 )
+					{
+						$this->images[$key][$key2] = $images[$key][$key2] = PHPBB_URL . $val2;
+					}
+				}
+				else
+				{
+					$this->images[$key] = $images[$key] = str_replace('{LANG}', $img_dir, $value);
+					$this->images[$key] = $images[$key] = PHPBB_URL . $images[$key];
+				}
+				
+				if(empty($images['forum']))
+				{
+					//print_r('Your style configuration file has a typo! ');
+					//print_r($images);
+					$images['forum'] = 'folder.gif';
+				}						
+				
+				/* Here we overwrite phpBB images from the template db or configuration file  */		
+				$rows = $this->image_rows($images);		
+				
+				foreach ($rows as $row)
+				{
+					$row['image_filename'] = rawurlencode($row['image_filename']);
+					
+					if(empty($row['image_name']))
+					{
+						//print_r('Your style configuration file has a typo! ');
+						//print_r($row);
+						$row['image_name'] = 'spacer.gif';
+					}
+								
+					$this->img_array[$row['image_name']] = $row;				
+				}			
+			}			
 			
 			//include($this->phpbb_root_path . $this->cloned_current_template_path . '/' . $this->cloned_template_name . '.cfg');
 				
@@ -1899,7 +1943,9 @@ class pafiledb_templates
 	function img($img, $alt = '', $width = false, $suffix = '', $type = '')
 	{
 		static $imgs; //$this->module_root_path; //$this->root_path;
-		
+				
+		$this->module_root_path = $this->ext_path = $this->ext_manager->get_extension_path('orynider/pafiledb', true);
+				
 		$title = '';
 		
 		if ($alt)
@@ -2122,11 +2168,11 @@ class pafiledb_templates
 			{
 				$current_template_images = $current_template_path . $current_template_name . '/images/' . $this->decode_lang($this->img_data[$img]['image_lang']);
 			}		
-			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name. '/theme/' . $this->img_data[$img]['image_lang'] . '/') )
+			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name. '/theme/images/' . $this->img_data[$img]['image_lang'] . '/') )
 			{		
 				$current_template_images = $current_template_path . $current_template_name . '/theme/images/' . $this->img_data[$img]['image_lang'];
 			}
-			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/' . $this->encode_lang($this->lang_name) . '/') )
+			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/images/' . $this->encode_lang($this->lang_name) . '/') )
 			{		
 				$current_template_images = $current_template_path  . $current_template_name . '/theme/images/' . $this->encode_lang($this->lang_name);
 			}
@@ -2144,11 +2190,11 @@ class pafiledb_templates
 			{
 				$current_template_images = $current_template_path . $current_template_name . '/images/' . $this->decode_lang($this->img_data[$img]['image_lang']);
 			}		
-			else if ( file_exists($this->phpbb_root_path . $this->module_root_path . $current_template_path  . $current_template_name . '/theme/' . $this->img_data[$img]['image_lang'] . '/') )
+			else if ( file_exists($this->phpbb_root_path . $this->module_root_path . $current_template_path  . $current_template_name . '/theme/images/' . $this->img_data[$img]['image_lang'] . '/') )
 			{		
 				$current_template_images = $current_template_path . $current_template_name . '/theme/images/' . $this->img_data[$img]['image_lang'];
 			}
-			else if ( file_exists($this->phpbb_root_path . $this->module_root_path . $current_template_path  . $current_template_name . '/theme/' . $this->encode_lang($this->lang_name) . '/') )
+			else if ( file_exists($this->phpbb_root_path . $this->module_root_path . $current_template_path  . $current_template_name . '/theme/images/' . $this->encode_lang($this->lang_name) . '/') )
 			{		
 				$current_template_images = $current_template_path  . $current_template_name . '/theme/images/' . $this->encode_lang($this->lang_name);
 			}
@@ -2170,7 +2216,7 @@ class pafiledb_templates
 			{		
 				$this->img_lang = $this->default_language_name;
 			}		
-			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/' . $this->default_language . '/') )
+			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/images/' . $this->default_language . '/') )
 			{		
 				$this->img_lang = $this->default_language;
 			}
@@ -2190,7 +2236,7 @@ class pafiledb_templates
 			{		
 				$this->img_lang = $this->user_language_name;
 			}		
-			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/' . $this->user_language . '/') )
+			else if ( file_exists($this->phpbb_root_path . $current_template_path  . $current_template_name . '/theme/images/' . $this->user_language . '/') )
 			{		
 				$this->img_lang = $this->user_language;
 			}
@@ -2208,7 +2254,7 @@ class pafiledb_templates
 		}		
 		elseif (isset($this->img_data[$img]['image_filename']))
 		{
-			$this->img_data[$img]['src'] = PHPBB_URL . $this->template_path . $this->template_name . '/' . $this->img_lang . '/' . $this->img_data[$img]['image_filename'];	
+			$this->img_data[$img]['src'] = PHPBB_URL . $current_template_images . '/' . $this->img_data[$img]['image_filename'];	
 		}
 		else
 		{
@@ -2221,7 +2267,7 @@ class pafiledb_templates
 			$this->img_data[$img]['image_width'] 	= ($width === false) ? '' : $width; 
 			$this->img_data[$img]['imageset_id'] 	= $img_rows[$lastrow]['imageset_id']; 		
 			
-			$this->img_data[$img]['src'] = PHPBB_URL . $this->template_path . $this->template_name . '/' . $this->img_lang . '/' . $this->img_data[$img]['image_filename'];								
+			$this->img_data[$img]['src'] = PHPBB_URL . $current_template_images . '/' . $this->img_data[$img]['image_filename'];								
 		}		
 		
 		$this->img_data[$img]['width'] = !empty($height) ? $height : (!empty($this->img_array[$img]['image_width']) ? (!empty($this->img_array[$img]['image_width']) ? $this->img_array[$img]['image_width'] : (!empty($this->img_array[$img]['image_width']) ? $this->img_array[$img]['image_width'] : 47)) : 47);
