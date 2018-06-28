@@ -17,7 +17,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 {
-	/** @var \orynider\pafiledb\core\functions */
+	/** @var \orynider\pafiledb\core\pafiledb */
 	protected $functions;
 	
 	/** @var \orynider\pafiledb\core\custom_field */	
@@ -125,6 +125,7 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 		ContainerInterface $container,
 		$php_ext,
 		$root_path,
+		
 		$pa_files_table,
 		$pa_cat_table,
 		$pa_config_table, 
@@ -148,6 +149,7 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 		$this->container 			= $container;		
 		$this->php_ext 				= $php_ext;
 		$this->root_path 			= $root_path;
+		
 		$this->pa_files_table 		= $pa_files_table;
 		$this->pa_cat_table 		= $pa_cat_table;
 		$this->pa_config_table 		= $pa_config_table;
@@ -182,9 +184,9 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 		// =======================================================
 		// Request vars
 		// =======================================================
-		$start = $this->request->variable('start', 0);
-		$file_id = $this->request->variable('file_id', 0, true);
-		$page_num = $this->request->variable('page_num', 1) - 1;
+		$start 		= $this->request->variable('start', 0);
+		$file_id 	= $this->request->variable('file_id', 0, true);
+		$page_num 	= $this->request->variable('page_num', 1) - 1;
 
 		if (empty($file_id))
 		{
@@ -265,33 +267,33 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 		$this->functions->generate_cat_nav($cat_data);
 		
 		$this->template->assign_vars( array(
-			'L_INDEX' => "<<",
+			'L_INDEX' 			=> "<<",
 
-			'U_INDEX' => append_sid( $this->root_path . 'index.' . $this->php_ext ),
-			'U_DOWNLOAD_HOME' => append_sid( $this->functions->mxurl() ),
+			'U_INDEX' 			=> append_sid( $this->root_path . 'index.' . $this->php_ext ),
+			'U_DOWNLOAD_HOME' 	=> append_sid( $this->functions->mxurl() ),
 
-			'FILE_NAME' => $file_data['file_name'],
-			'DOWNLOAD' => $pafiledb_config['module_name']
+			'FILE_NAME' 		=> $file_data['file_name'],
+			'DOWNLOAD' 			=> $pafiledb_config['module_name']
 		));
 
 		// ===================================================
 		// Prepare file info to display them
 		// ===================================================
-		$file_time = $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_time'], $this->config['board_timezone'] );
-		$file_last_download = ( $file_data['file_last'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_last'], $this->config['board_timezone'] ) : $this->user->lang['never'];
-		$file_update_time = ( $file_data['file_update_time'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_update_time'], $this->config['board_timezone'] ) : $this->user->lang['never'];
-		$file_author = trim( $file_data['file_creator'] );
-		$file_version = trim( $file_data['file_version'] );
-		$file_screenshot_url = trim( $file_data['file_ssurl'] );
-		$file_website_url = trim( $file_data['file_docsurl'] );
-		$file_download_url = $this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id));								
-		$file_view_url = $this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id));		
-		$file_download_link = ( $file_data['file_license'] > 0 ) ? append_sid($this->helper->route('orynider_pafiledb_controller_license', array('license_id' =>	$file_data['file_license'], 'file_id' =>	$file_id )) ) : append_sid($this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id)));
-		$file_size = $this->functions->get_file_size( $file_id, $file_data );
+		$file_time 				= $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_time'], $this->config['board_timezone'] );
+		$file_last_download 	= ( $file_data['file_last'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_last'], $this->config['board_timezone'] ) : $this->user->lang['never'];
+		$file_update_time 		= ( $file_data['file_update_time'] ) ? $this->functions->create_date( $this->config['default_dateformat'], $file_data['file_update_time'], $this->config['board_timezone'] ) : $this->user->lang['never'];
+		$file_author 			= trim( $file_data['file_creator'] );
+		$file_version 			= trim( $file_data['file_version'] );
+		$file_screenshot_url 	= trim( $file_data['file_ssurl'] );
+		$file_website_url 		= trim( $file_data['file_docsurl'] );
+		$file_download_url 		= $this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id));								
+		$file_view_url	 		= $this->helper->route('orynider_pafiledb_controller_file', array('file_id' =>	$file_id));		
+		$file_download_link 	= ( $file_data['file_license'] > 0 ) ? append_sid($this->helper->route('orynider_pafiledb_controller_license', array('license_id' =>	$file_data['file_license'], 'file_id' =>	$file_id )) ) : append_sid($this->helper->route('orynider_pafiledb_controller_download', array('file_id' =>	$file_id)));
+		$file_size 				= $this->functions->get_file_size( $file_id, $file_data );
 
-		$file_poster = ( $file_data['user_id'] != ANONYMOUS ) ? '<a href="' . append_sid("{$this->root_path}{$memberlist}.{$this->php_ext}?mode=viewprofile&amp;action=view&amp;u={$file_data['user_id']}") . '">' : '';
-		$file_poster .= ( $file_data['user_id'] != ANONYMOUS ) ? $file_data['username'] : $this->user->lang['Guest'];
-		$file_poster .= ( $file_data['user_id'] != ANONYMOUS ) ? '</a>' : '';
+		$file_poster 			= ( $file_data['user_id'] != ANONYMOUS ) ? '<a href="' . append_sid("{$this->root_path}{$memberlist}.{$this->php_ext}?mode=viewprofile&amp;action=view&amp;u={$file_data['user_id']}") . '">' : '';
+		$file_poster 		.= ( $file_data['user_id'] != ANONYMOUS ) ? $file_data['username'] : $this->user->lang['Guest'];
+		$file_poster 		.= ( $file_data['user_id'] != ANONYMOUS ) ? '</a>' : '';
 
 		if ( !MXBB_MODULE )
 		{
@@ -313,68 +315,70 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 		}
 		
 		//overwrite some phpBB3 vars
-		$images['pa_icon_delpost'] = $this->user->img('icon_post_delete', 'DELETE_POST', false, '', 'src');
-		$images['pa_icon_edit'] = $this->user->img('icon_post_edit', 'EDIT_POST', false, '', 'src');
-		
+		//$images['pa_icon_delpost'] 		= $this->templates->img('icon_post_delete', 'DELETE_POST', false, '', 'src');
+		//$images['pa_icon_edit'] 		= $this->templates->img('icon_post_edit', 'EDIT_POST', false, '', 'src');
+		//print_r($images['pa_icon_delpost']);
 		$this->template->assign_vars( array(
-			'L_CLICK_HERE' => $this->user->lang['Click_here'],
-			'L_AUTHOR' => $this->user->lang['Creator'],
-			'L_VERSION' => $this->user->lang['FILE_VERSION'],
-			'L_SCREENSHOT' => $this->user->lang['FILE_SCRSHT'],
-			'L_WEBSITE' => $this->user->lang['Docs'],
-			'L_FILE' => $this->user->lang['FILE_TITLE'],
-			'L_DESC' => $this->user->lang['FILE_Desc'],
-			'L_DATE' => $this->user->lang['FILE_Date'],
-			'L_UPDATE_TIME' => $this->user->lang['Update_time'],
-			'L_LASTTDL' => $this->user->lang['FILE_LASTDL'],
-			'L_DLS' => $this->user->lang['FILE_DLS'],
-			'L_SIZE' => $this->user->lang['FILE_SIZE'],
-			'L_EDIT' => $this->user->lang['Editfile'],
-			'L_DELETE' => $this->user->lang['Deletefile'],
-			'L_DOWNLOAD' => $this->user->lang['Downloadfile'],
-			'L_EMAIL' => $this->user->lang['Emailfile'],
-			'L_SUBMITED_BY' => $this->user->lang['Submiter'],
+			'L_CLICK_HERE' 		=> $this->user->lang['Click_here'],
+			'L_AUTHOR' 			=> $this->user->lang['Creator'],
+			'L_VERSION' 		=> $this->user->lang['FILE_VERSION'],
+			'L_SCREENSHOT' 		=> $this->user->lang['FILE_SCRSHT'],
+			'L_WEBSITE' 		=> $this->user->lang['Docs'],
+			'L_FILE' 			=> $this->user->lang['FILE_TITLE'],
+			'L_DESC' 			=> $this->user->lang['FILE_DESC'],
+			'L_DATE' 			=> $this->user->lang['FILE_DATE'],
+			'L_UPDATE_TIME' 	=> $this->user->lang['Update_time'],
+			'L_LASTTDL' 		=> $this->user->lang['FILE_LASTDL'],
+			'L_DLS' 			=> $this->user->lang['FILE_DLS'],
+			'L_SIZE' 			=> $this->user->lang['FILE_SIZE'],
+			'L_EDIT' 			=> $this->user->lang['Editfile'],
+			'L_DELETE' 			=> $this->user->lang['Deletefile'],
+			'L_DOWNLOAD' 		=> $this->user->lang['Downloadfile'],
+			'L_EMAIL' 			=> $this->user->lang['Emailfile'],
+			'L_SUBMITED_BY' 	=> $this->user->lang['Submiter'],
 
-			'SHOW_AUTHOR' => ( !empty( $file_author ) ) ? true : false,
-			'SHOW_VERSION' => ( !empty( $file_version ) ) ? true : false,
-			'SHOW_SCREENSHOT' => ( !empty( $file_screenshot_url ) ) ? true : false,
-			'SHOW_WEBSITE' => ( !empty( $file_website_url ) ) ? true : false,
-			'SS_AS_LINK' => ( $file_data['file_sshot_link'] ) ? true : false,
-			'FILE_NAME' => $file_data['file_name'],
-			'FILE_LONGDESC' => nl2br( $file_data['file_longdesc'] ),
-			'FILE_SUBMITED_BY' => $file_poster,
-			'FILE_AUTHOR' => $file_author,
-			'FILE_VERSION' => $file_version,
-			'FILE_SCREENSHOT' => $file_screenshot_url,
-			'FILE_WEBSITE' => $file_website_url,
-			'FILE_DISABLE_MSG' => nl2br( $file_data['disable_msg'] ),
+			'SHOW_AUTHOR' 		=> ( !empty( $file_author ) ) ? true : false,
+			'SHOW_VERSION' 		=> ( !empty( $file_version ) ) ? true : false,
+			'SHOW_SCREENSHOT' 	=> ( !empty( $file_screenshot_url ) ) ? true : false,
+			'SHOW_WEBSITE' 		=> ( !empty( $file_website_url ) ) ? true : false,
+			
+			'SS_AS_LINK' 		=> ( $file_data['file_sshot_link'] ) ? true : false,			
+			
+			'FILE_NAME' 		=> $file_data['file_name'],
+			'FILE_LONGDESC' 	=> nl2br( $file_data['file_longdesc'] ),
+			'FILE_SUBMITED_BY' 	=> $file_poster,
+			'FILE_AUTHOR' 		=> $file_author,
+			'FILE_VERSION' 		=> $file_version,
+			'FILE_SCREENSHOT' 	=> $file_screenshot_url,
+			'FILE_WEBSITE' 		=> $file_website_url,
+			'FILE_DISABLE_MSG' 	=> nl2br( $file_data['disable_msg'] ),
 
-			'AUTH_EDIT' => ( ( $this->functions->auth_user[$file_data['file_catid']]['auth_edit_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
-			'AUTH_DELETE' => ( ( $this->functions->auth_user[$file_data['file_catid']]['auth_delete_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
-			'AUTH_DOWNLOAD' => ( $this->functions->auth_user[$file_data['file_catid']]['auth_download'] ) ? true : false,
-			'AUTH_EMAIL' => ( $this->functions->auth_user[$file_data['file_catid']]['auth_email'] ) ? true : false,
+			'AUTH_EDIT' 		=> ( ($this->functions->auth_user[$file_data['file_catid']]['auth_edit_file'] && ($file_data['user_id'] == $this->user->data['user_id']) ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
+			'AUTH_DELETE' 		=> ( ($this->functions->auth_user[$file_data['file_catid']]['auth_delete_file'] && ($file_data['user_id'] == $this->user->data['user_id']) ) || $this->functions->auth_user[$file_data['file_catid']]['auth_mod'] ) ? true : false,
+			'AUTH_DOWNLOAD' 	=> ($this->functions->auth_user[$file_data['file_catid']]['auth_download'] ) ? true : false,
+			'AUTH_EMAIL' 		=> ($this->functions->auth_user[$file_data['file_catid']]['auth_email'] ) ? true : false,
 
-			'DELETE_IMG' => $images['pa_icon_delpost'],
-			'EDIT_IMG' => $images['pa_icon_edit'],
-			'DOWNLOAD_IMG' => $images['pa_download'],
-			'EMAIL_IMG' => $images['pa_email'],
+			'DELETE_IMG' 		=> $this->templates->img($images['pa_icon_delpost'], 'EDIT_POST', false, '', 'src'),
+			'EDIT_IMG' 			=> $this->templates->img($images['pa_icon_edit'], 'EDIT_POST', false, '', 'src'),
+			'DOWNLOAD_IMG' 		=> $this->templates->img($images['pa_download'], 'EDIT_POST', false, '', 'src'),
+			'EMAIL_IMG' 		=> $this->templates->img($images['pa_email'], 'EDIT_POST', false, '', 'src'),
 
-			'TIME' => $file_time,
-			'UPDATE_TIME' => ( $file_data['file_update_time'] != $file_data['file_time'] ) ? $file_update_time : $this->user->lang['never'],
-			'FILE_DLS' => intval( $file_data['file_dls'] ),
-			'FILE_SIZE' => $file_size,
-			'LAST' => $file_last_download,
+			'TIME' 				=> $file_time,
+			'UPDATE_TIME' 		=> ( $file_data['file_update_time'] != $file_data['file_time'] ) ? $file_update_time : $this->user->lang['never'],
+			'FILE_DLS' 			=> intval( $file_data['file_dls'] ),
+			'FILE_SIZE' 		=> $file_size,
+			'LAST' 				=> $file_last_download,
 
-			'U_DOWNLOAD' => $file_download_link,
-			'U_DELETE' => append_sid($this->helper->route('orynider_pafiledb_controller_upload', array('do' => 'delete', 'file_id' => $file_id))),
-			'U_EDIT' => append_sid($this->helper->route('orynider_pafiledb_controller_upload', array('file_id' => $file_id))),
-			'U_EMAIL' => append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ) ),
+			'U_DOWNLOAD' 		=> $file_download_link,
+			'U_DELETE' 			=> append_sid($this->helper->route('orynider_pafiledb_controller_user_upload', array('do' => 'delete', 'file_id' => $file_id))),
+			'U_EDIT' 			=> append_sid($this->helper->route('orynider_pafiledb_controller_user_upload', array('file_id' => $file_id))),
+			'U_EMAIL' 			=> append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ) ),
 
 			// Buttons
-			'B_DOWNLOAD_IMG' => $this->functions->create_button('pa_download', $this->user->lang['Downloadfile'], $file_download_link),
-			'B_DELETE_IMG' => $this->functions->create_button('pa_icon_delpost', $this->user->lang['Deletefile'], "javascript:delete_item('". append_sid( $this->functions->mxurl( 'action=user_upload&do=delete&file_id=' . $file_id )) . "')"),
-			'B_EDIT_IMG' => $this->functions->create_button('pa_icon_edit', $this->user->lang['Editfile'], append_sid( $this->functions->mxurl( 'action=user_upload&file_id=' . $file_id ) )),
-			'B_EMAIL_IMG' => $this->functions->create_button('pa_email', $this->user->lang['Emailfile'], append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ))),
+			'B_DOWNLOAD_IMG' 	=> $this->functions->create_button('pa_download', $this->user->lang['Downloadfile'], $file_download_link),
+			'B_DELETE_IMG' 		=> $this->functions->create_button('pa_icon_delpost', $this->user->lang['Deletefile'], "javascript:delete_item('". $this->functions->mxurl( 'action=user_upload&do=delete&file_id=' . $file_id ) . "')"),
+			'B_EDIT_IMG' 		=> $this->functions->create_button('pa_icon_edit', $this->user->lang['Editfile'], append_sid( $this->functions->mxurl( 'action=user_upload&do=edit&file_id=' . $file_id ) )),
+			'B_EMAIL_IMG' 		=> $this->functions->create_button('pa_email', $this->user->lang['Emailfile'], append_sid( $this->functions->mxurl( 'action=email&file_id=' . $file_id ))),
 		));
 		
 		if (!isset($custom_field) && !is_object($custom_field))
@@ -400,17 +404,17 @@ class pafiledb_file extends \orynider\pafiledb\core\pafiledb_public
 			}
 
 			$this->template->assign_block_vars( 'use_ratings', array(
-				'L_RATING' => $this->user->lang['DlRating'],
-				'L_RATE' => $this->user->lang['Rate'],
-				'L_VOTES' => $this->user->lang['Votes'],
-				'FILE_VOTES' => $file_data['total_votes'],
-				'RATING' => $file_rating,
+				'L_RATING' 		=> $this->user->lang['DlRating'],
+				'L_RATE' 		=> $this->user->lang['Rate'],
+				'L_VOTES' 		=> $this->user->lang['Votes'],
+				'FILE_VOTES' 	=> $file_data['total_votes'],
+				'RATING' 		=> $file_rating,
 
 				//
 				// Allowed to rate
 				//
-				'RATE_IMG' => $rate_img,
-				'U_RATE' => append_sid( $this->functions->mxurl( 'action=rate&file_id=' . $file_id ) ),
+				'RATE_IMG' 	=> $rate_img,
+				'U_RATE' 	=> append_sid( $this->functions->mxurl( 'action=rate&file_id=' . $file_id ) ),
 
 				// Buttons
 				'B_RATE_IMG' => $this->user->create_button('pa_rate', $this->user->lang['Rate'], mx_append_sid( $this->this_mxurl( 'action=rate&file_id=' . $file_id ) )),

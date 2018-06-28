@@ -113,7 +113,7 @@ class pafiledb_category extends \orynider\pafiledb\core\pafiledb_public
 		$this->helper 				= $helper;
 		$this->pagination 			= $pagination;
 		$this->ext_manager	 		= $ext_manager;
-		//$this->container	 		= $container;		
+		//$this->container	 			= $container;		
 		$this->php_ext 				= $php_ext;
 		$this->root_path 			= $root_path;
 		$this->pa_files_table 		= $pa_files_table;

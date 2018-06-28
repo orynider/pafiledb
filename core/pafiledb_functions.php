@@ -502,80 +502,84 @@ class pafiledb_functions
 	 */
 	function page_header( $page_title )
 	{
-		global $pafiledb_config, $lang, $template, $userdata, $images, $pafiledb, $mx_user;
-		global $template, $db, $theme, $gen_simple_header, $starttime, $phpEx, $board_config, $user_ip;
-		global $admin_level, $level_prior, $tree, $do_gzip_compress;
-		global $phpbb_root_path, $mx_root_path, $module_root_path, $is_block, $title, $mx_block;
-		global $action;
-
+		// Read out config values
+		$pafiledb_config = $this->config_values();		
+		
+		$cat_id = $this->request->variable('cat_id', 0);		
+		
 		if ( $action != 'download' )
 		{
-			//include_once( $mx_root_path . 'includes/page_header.' . $phpEx );
+			//page_header($page_title);
 		}
-
-		if ( $action == 'category' )
+		
+		if ( $cat_id )
 		{
-			$upload_url = mx_append_sid( $pafiledb->this_mxurl( "action=user_upload&cat_id={$_REQUEST['cat_id']}" ) );
-			$mcp_url = mx_append_sid( $pafiledb->this_mxurl( "action=mcp&cat_id={$_REQUEST['cat_id']}" ) );
+			$upload_url 	= append_sid($this->helper->route('orynider_pafiledb_controller_user_upload', array('cat_id' => $cat_id)) );
+			$mcp_url 		= append_sid($this->helper->route('orynider_pafiledb_controller_mcp', array('cat_id' => $cat_id)) );
 
-			$upload_auth = $pafiledb->modules[$pafiledb->module_name]->auth_user[$_REQUEST['cat_id']]['auth_upload'];
-			$mcp_auth = $pafiledb->modules[$pafiledb->module_name]->auth_user[$_REQUEST['cat_id']]['auth_mod'];
+			$upload_auth 	= $this->auth_user[$cat_id]['auth_upload'];
+			$mcp_auth 		= $this->auth_user[$cat_id]['auth_mod'];
 		}
 		else
 		{
-			$upload_url = mx_append_sid( $pafiledb->this_mxurl( "action=user_upload" ) );
-
-			$cat_list = $pafiledb->modules[$pafiledb->module_name]->generate_jumpbox( 0, 0, '', true, true );
+			$upload_url = $this->helper->route('orynider_pafiledb_controller_user_upload  ');
+			//append_sid( $this->mxurl( "action=user_upload" ) );
+			
+			// Generate the sub categories list 
+			//$cat_list = $this->generate_cat_list(0, 0, '', true, true);
+			$cat_list = $this->generate_jumpbox( 0, 0, '', true, true );
 			// $upload_auth = (empty($cat_list)) ? FALSE : TRUE;
+			
 			$upload_auth = false;
 			$mcp_auth = false;
 			unset( $cat_list );
 		}
-
-		$template->assign_vars( array(
+			
+		$this->template->assign_vars( array(
 				'L_TITLE' => $title,
-				'IS_AUTH_VIEWALL' => ( $pafiledb_config['settings_viewall'] ) ? ( ( $pafiledb->modules[$pafiledb->module_name]->auth_global['auth_viewall'] ) ? true : false ) : false,
-				'IS_AUTH_SEARCH' => ( $pafiledb->modules[$pafiledb->module_name]->auth_global['auth_search'] ) ? true : false,
-				'IS_AUTH_STATS' => ( $pafiledb->modules[$pafiledb->module_name]->auth_global['auth_stats'] ) ? true : false,
-				'IS_AUTH_TOPLIST' => ( $pafiledb->modules[$pafiledb->module_name]->auth_global['auth_toplist'] ) ? true : false,
+				'IS_AUTH_VIEWALL' => ($pafiledb_config['settings_viewall']) ? (($this->auth_global['auth_viewall']) ? true : false) : false,
+				'IS_AUTH_SEARCH' => ($this->auth->acl_get('u_pa_files_search')) ? true : false,
+				'IS_AUTH_STATS' => ($this->auth->acl_get('u_pa_files_stats')) ? true : false,
+				'IS_AUTH_TOPLIST' => ($this->auth->acl_get('u_pa_files_toplist')) ? true : false,
 
 				'IS_AUTH_UPLOAD' => $upload_auth,
-				'IS_ADMIN' => ( $userdata['user_level'] == ADMIN && $userdata['session_logged_in'] ) ? true : 0,
-				'IS_MOD' => $pafiledb->modules[$pafiledb->module_name]->auth_user[$_REQUEST['cat_id']]['auth_mod'],
+				'IS_ADMIN' => ( $this->user->data['user_level'] == ADMIN && $this->user->data['is_registred'] ) ? true : 0,
+				'IS_MOD' => $this->auth_user[$cat_id]['auth_mod'],
 				'IS_AUTH_MCP' => $mcp_auth,
 
-				'L_OPTIONS' => $lang['Options'],
-				'L_SEARCH' => $lang['Search'],
-				'L_STATS' => $lang['Statistics'],
-				'L_TOPLIST' => $lang['Toplist'],
-				'L_UPLOAD' => $lang['User_upload'],
-				'L_VIEW_ALL' => $lang['Viewall'],
+				'L_OPTIONS' => $this->user->lang['Options'],
+				'L_SEARCH' => $this->user->lang['Search'],
+				'L_STATS' => $this->user->lang['Statistics'],
+				'L_TOPLIST' => $this->user->lang['Toplist'],
+				'L_UPLOAD' => $this->user->lang['User_upload'],
+				'L_VIEW_ALL' => $this->user->lang['Viewall'],
 
-				'SEARCH_IMG' => $images['pa_search'],
-				'STATS_IMG' => $images['pa_stats'],
-				'TOPLIST_IMG' => $images['pa_toplist'],
-				'UPLOAD_IMG' => $images['pa_upload'],
-				'VIEW_ALL_IMG' => $images['pa_viewall'],
-				'MCP_IMG' => $images['pa_moderator'],				
-				'MCP_LINK' => $lang['MCP_title'],
+				'SEARCH_IMG' => $this->templates->img('icon_pa_search', '', false, '', 'src'),
+				'STATS_IMG' => $this->templates->img('icon_pa_stats', '', false, '', 'src'),
+				'TOPLIST_IMG' => $this->templates->img('icon_pa_toplist', '', false, '', 'src'),
+				'UPLOAD_IMG' => $this->templates->img('icon_pa_upload', '', false, '', 'src'),
+				'VIEW_ALL_IMG' => $this->templates->img('icon_pa_viewall', '', false, '', 'src'),
+				
+				'MCP_LINK' => $this->user->lang['MCP_title'],
+				'L_NEW_FILE' => 'New File',
 
-				'U_TOPLIST' => mx_append_sid( $pafiledb->this_mxurl( "action=toplist" ) ),
-				'U_PASEARCH' => mx_append_sid( $pafiledb->this_mxurl( "action=search" ) ),
+				'U_TOPLIST' => append_sid($this->helper->route('orynider_pafiledb_controller_toplist')),
+				'U_PASEARCH' => append_sid($this->helper->route('orynider_pafiledb_controller_search')),
 				'U_UPLOAD' => $upload_url,
-				'U_VIEW_ALL' => mx_append_sid( $pafiledb->this_mxurl( "action=viewall" ) ),
-				'U_PASTATS' => mx_append_sid( $pafiledb->this_mxurl( "action=stats" ) ),
+				'U_VIEW_ALL' => append_sid($this->helper->route('orynider_pafiledb_controller_viewall')),
+				'U_PASTATS' => append_sid($this->helper->route('orynider_pafiledb_controller_stats')),
 				'U_MCP' => $mcp_url,
 
-				'MX_ROOT_PATH' => $mx_root_path,
+				'MX_ROOT_PATH' => $this->root_path,
 				'BLOCK_ID' => $mx_block->block_id,
 
 				// Buttons
-				'B_SEARCH_IMG' => $mx_user->create_button('pa_search', $lang['Search'], mx_append_sid($pafiledb->this_mxurl("action=search"))),
-				'B_STATS_IMG' => $mx_user->create_button('pa_stats', $lang['Statistics'], mx_append_sid($pafiledb->this_mxurl("action=stats"))),
-				'B_TOPLIST_IMG' => $mx_user->create_button('pa_toplist', $lang['Toplist'], mx_append_sid($pafiledb->this_mxurl("action=toplist"))),
-				'B_UPLOAD_IMG' => $mx_user->create_button('pa_upload', $lang['User_upload'], $upload_url),
-				'B_VIEW_ALL_IMG' => $mx_user->create_button('pa_viewall', $lang['Viewall'], mx_append_sid($pafiledb->this_mxurl("action=viewall"))),
-				'B_MCP_LINK' => $mx_user->create_button('pa_moderator', $lang['MCP_title'], $mcp_url),
+				'B_SEARCH_IMG' => $this->create_button('icon_pa_search', $this->user->lang['Search'], append_sid($this->helper->route('orynider_pafiledb_controller_search'))),
+				'B_STATS_IMG' => $this->create_button('icon_pa_stats', $this->user->lang['Statistics'], append_sid($this->helper->route('orynider_pafiledb_controller_stats'))),
+				'B_TOPLIST_IMG' => $this->create_button('icon_pa_toplist', $this->user->lang['Toplist'], append_sid($this->helper->route('orynider_pafiledb_controller_toplist'))),
+				'B_UPLOAD_IMG' => $this->create_button('icon_pa_upload', $this->user->lang['User_upload'], $upload_url),
+				'B_VIEW_ALL_IMG' => $this->create_button('icon_pa_viewall', $this->user->lang['Viewall'], append_sid($this->helper->route('orynider_pafiledb_controller_viewall'))),
+				'B_MCP_LINK' => $this->create_button('icon_pa_moderator', $this->user->lang['MCP_title'], $mcp_url),
 			));
 	}
 
@@ -584,26 +588,108 @@ class pafiledb_functions
 	 *
 	 */
 	function page_footer()
-	{
-		global $pafiledb_cache, $lang, $template, $board_config, $pafiledb, $userdata;
-		global $phpEx, $template, $do_gzip_compress, $debug, $db, $starttime;
-		global $phpbb_root_path, $mx_root_path, $module_root_path, $is_block, $page_id;
-		global $pa_module_version, $pa_module_orig_author, $pa_module_author;
+	{		
+		$module_manager = $this->extension_manager->create_extension_metadata_manager('orynider/pafiledb', $this->template);
+		$meta = $module_manager->get_metadata();
+		$authors_names = array();
+		$authors_homepages = array();
 
-		$template->assign_vars( array(
-			'L_QUICK_GO' => $lang['Quick_go'],
-			'L_QUICK_NAV' => $lang['Quick_nav'],
-			'L_QUICK_JUMP' => $lang['Quick_jump'],
-			'JUMPMENU' => $pafiledb->modules[$pafiledb->module_name]->generate_jumpbox( 0, 0, array( $_GET['cat_id'] => 1 ) ),
-			'S_JUMPBOX_ACTION' => mx_append_sid( $pafiledb->this_mxurl( ) ),
+		foreach (array_slice($meta['authors'], 0, 1) as $author)
+		{
+			$authors_names[] = $author['name'];
+			$authors_homepages[] = sprintf('<a href="%1$s" title="%2$s">%2$s</a>', $author['homepage'], $author['name']);
+		}		
+		
+		$cat_id = $this->request->variable('cat_id', 0);
+		
+		
+		if ( !MXBB_MODULE || MXBB_27x )
+		{
+			$pa_module_version = "pafileDB Download Manager v. 0.9.0";
+			
+			$pa_extension_title = "Ported as phpBB3 Mod and phpBB Extension by ";
+			$pa_extension_author = "FlorinCB aka OryNider";
+			$pa_extension_years = "2008-2014, 2018";
+			$pa_extension_home = "http://mxpcms.sf.net/";			
+			
+			$pa_module_title = "Ported as MXP-Addon Module by ";
+			$pa_module_author = "Jon Ohlsson";
+			$pa_module_years = "2005-2008";
+			$pa_module_home = "http://www.samskolan.se/";
+			
+			$pa_module_dm_title = "Some Ideeas :: Download System by ";			
+			$pa_module_dm_author = "dmzx";
+			$pa_module_dm_years = "2015-2017";
+			$pa_module_dm_home = "http://www.dmzx-web.net";
+		
+			$pa_module_orig_title = "Ported as phpBB Mod by ";			
+			$pa_module_orig_author = "Mohd Basri";
+			$pa_module_orig_years = "2002-2005";
+			$pa_module_dorig_home = "";			
+		}		
+		
+		$dt = $this->user->create_datetime();
+		
+		if (function_exists('phpbb_format_timezone_offset'))
+		{	
+			$timezone_offset = $this->user->lang(array('timezones', 'UTC_OFFSET'), phpbb_format_timezone_offset($dt->getOffset()));
+		}
+		else
+		{	
+			$timezone_offset = $this->user->lang(array('timezones', 'UTC_OFFSET')) . ', ' . $this->config['board_timezone'];
+		}		
+		
+		$timezone_name = $this->user->timezone->getName();
+		
+		if (isset($this->user->lang['timezones'][$timezone_name]))
+		{
+			$timezone_name = $user->lang['timezones'][$timezone_name];
+		}
+		elseif (isset($this->user->lang[number_format($this->config['board_timezone'])]))
+		{
+			$timezone_name = $this->user->lang[number_format($this->config['board_timezone'])];
+		}		
+		
+		$timezone = sprintf(isset($this->user->lang['ALL_TIMES']) ? $this->user->lang['ALL_TIMES'] : $this->user->lang['All_times'], $timezone_offset, $timezone_name);				
+				
+		$this->template->assign_vars( array(
+			'L_QUICK_GO' 						=> $this->user->lang['Quick_go'],
+			'L_QUICK_NAV' 						=> $this->user->lang['Quick_nav'],
+			'L_QUICK_JUMP' 						=> $this->user->lang['Quick_jump'],
+			
+			'JUMPMENU' 							=> $this->generate_jumpbox( 0, 0, array( $cat_id => 1 ) ),
+			'S_JUMPBOX_ACTION' 					=> append_sid($this->helper->route('orynider_pafiledb_controller_cat', array('cat_id' => $cat_id)) ),
 
-			'S_AUTH_LIST' => $pafiledb->modules[$pafiledb->module_name]->auth_can_list,
+			'S_AUTH_LIST' 						=> $this->auth_can_list,
 
-			'MX_PAGE' => $page_id,
-			'L_MODULE_VERSION' => $pa_module_version,
-			'L_MODULE_ORIG_AUTHOR' => $pa_module_orig_author,
-			'L_MODULE_AUTHOR' => $pa_module_author,
-			'S_TIMEZONE' => sprintf( $lang['All_times'], $lang[number_format( $board_config['board_timezone'] )] ) )
+			'MX_PAGE' 							=> $page_id,
+			
+			'MODULE_VERSION' 					=> $pa_module_version,			
+			'MODULE_TITLE' 						=> $pa_module_title,
+			'MODULE_AUTHOR' 					=> $pa_module_author,
+			'MODULE_YEARS' 						=> $pa_module_years,
+			'MODULE_AUTHOR_HOMEPAGE' 			=> $pa_module_home,
+			
+			'DISPLAY_NAME'						=> $meta['extra']['display-name'],
+			'AUTHORS_NAMES'						=> implode(' &amp; ', $authors_names),
+			'AUTHOR_HOMEPAGE'					=> implode(' &amp; ', $authors_homepages),			
+
+			'DOWNLOADSYSTEM_DISPLAY_NAME'		=> $pa_module_dm_title,
+			'DOWNLOADSYSTEM_AUTHOR_NAMES'		=> $pa_module_dm_author,
+			'DOWNLOADSYSTEM_AUTHOR_YEARS'		=> $pa_module_dm_years,			
+			'DOWNLOADSYSTEM_AUTHOR_HOMEPAGES'	=> $pa_module_dm_home,		
+			
+			'EXTENSION_TITLE' 					=> $pa_extension_title,
+			'EXTENSION_AUTHOR' 					=> $pa_extension_author,
+			'EXTENSION_YEARS' 					=> $pa_extension_years,		
+			'EXTENSION_AUTHOR_HOMEPAGE' 		=> $pa_extension_home,
+			
+			'MODULE_ORIG_TITLE' 				=> $pa_module_orig_title,
+			'MODULE_ORIG_AUTHOR' 				=> $pa_module_orig_author,
+			'MODULE_ORIG_YEARS' 				=> $pa_module_orig_years,						
+			'MODULE_ORIG_HOMEPAGE' 				=> $pa_module_orig_home,
+			
+			'S_TIMEZONE' 						=>  $timezone)
 		);
 
 		$pafiledb->modules[$pafiledb->module_name]->_pafiledb();

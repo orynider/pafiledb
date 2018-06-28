@@ -504,7 +504,7 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 		
 		// Files
 		'max_file_size' => '10485760',
-		'forbidden_extensions' => 'php, php3, php4, phtml, pl, asp, aspx, cgi',
+		'forbidden_extensions' => 'php, php3, php4, php5, php7, phtml, pl, asp, aspx, cgi',
 		'hotlink_prevent' => '1',
 		'hotlink_allowed' => '',
 		'tpl_php' => '0',
@@ -514,7 +514,7 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 		'sort_order' => 'DESC',
 		'pagination' => '20', // art_pagination & settings_file_page
 
-		'settings_stats' => '',
+		'settings_stats' => '0',
 		'settings_viewall' => '1',
 		'settings_dbdescription' => '',
 		'settings_topnumber' => '10',
@@ -576,7 +576,7 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 		'pagination_downloads' 	=> '25',					
 	
 		//Version
-		'pa_module_version'				=> '0.9.0',
+		'pa_module_version'		=> '0.9.0',
 	);	
 	
 	/**
@@ -618,7 +618,7 @@ class pa_install extends \phpbb\db\migration\container_aware_migration
 				'auth_read'				=> '-1',
 				'auth_view_file'		=> '-1',
 				'auth_edit_file'		=> '0',
-				'auth_delete_file'		=> '2',
+				'auth_delete_file'		=> '0',
 				'auth_upload'			=> '-1',
 				'auth_download'			=> '-1',
 				'auth_rate'				=> '-1',

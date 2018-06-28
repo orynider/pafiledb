@@ -11,6 +11,8 @@
 namespace orynider\pafiledb\core;
 
 use Symfony\Component\Config\ConfigCache;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use \phpbb\db\driver\driver_interface;
 
 /**
  * Generic module cache.
@@ -18,12 +20,12 @@ use Symfony\Component\Config\ConfigCache;
  */
 class pafiledb_cache extends \phpbb\cache\driver\base
 {
-	var $vars = '';
-	
-	var $vars_ts = array();
-	
-	var $var_expires = array();
+	/** @var service */
+	protected $cache;	
 
+	/** @var \phpbb\user */
+	protected $user;	
+	
 	/**
 	* @param ContainerInterface              $container		 
 	 */
@@ -45,31 +47,89 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 	
 	/**
 	 * @var string
-	 */
-	public $cache_dir;	
+	 */	 
+	public $cache_dir;
+
+	private $phpbb_cache;
+	private $phpbb_db;
 	
 	/**
-	* Set cache path
+	 * @var array
+	 */		
+	var $vars = '';
+	
+	var $vars_ts = array();
+	
+	var $var_expires = array();
+	
+	
+	/**
+	* The database tables
 	*
-	* @param \phpbb\extension\manager							$ext_manager	
+	* @var string
+	*/
+	protected $pa_files_table;
+
+	protected $pa_cat_table;
+
+	protected $pa_config_table;
+	
+	protected $pa_votes_table;
+	
+	protected $pa_comments_table;
+	
+	protected $pa_license_table;		
+	
+	/**
+	* cache constructor.
+	* @param \phpbb\cache\service 								$cache
+	
+	* @param \phpbb\db\driver\driver_interface 						$db		
+	* @param \phpbb\extension\manager							$ext_manager
+	* @param \Symfony\Component\DependencyInjection\ContainerInterface 	$phpbb_container DI container
 	* @param string $cache_dir Define the path to the cache directory (default: $module_root_path . 'cache/')
 	*/
-	function __construct($cache_dir = false,
-		$php_ext, $root_path)
+	public function __construct(
+								\phpbb\cache\service $cache,
+								\phpbb\user $user,								
+								\phpbb\db\driver\driver_interface $phpbb_db,
+								\phpbb\extension\manager $ext_manager, 
+								\Symfony\Component\DependencyInjection\ContainerInterface $phpbb_container,								
+								$php_ext, 
+								$root_path,		
+								$pa_files_table,
+								$pa_cat_table,
+								$pa_config_table, 
+								$pa_votes_table,
+								$pa_comments_table,
+								$pa_license_table,
+								$pa_auth_access_table)
 	{
-		global $phpbb_container;
-		
-		$this->cache_dir = !is_null($cache_dir) ? $cache_dir : $phpbb_container->getParameter('core.cache_dir');
-				
-		//$this->ext_manager	 		= $ext_manager;
+		$this->phpbb_cache 			= $cache;
+		$this->user 				= $user;		
+		$this->phpbb_db 			= $phpbb_db;
+		$this->db 					= $phpbb_db;						
+		$this->ext_manager	 		= $ext_manager;
 		$this->php_ext 				= $php_ext;
-		
-		$this->module_root_path = $root_path . 'ext/orynider/pafiledb/'; 
-		//$this->cache_dir = $root_path . 'ext/orynider/pafiledb/cache/';			
-		$this->container = $phpbb_container;
-		
-		$this->filesystem = new \phpbb\filesystem\filesystem();		
 
+		//global $phpbb_container;		
+		$this->container 			= $phpbb_container;
+		
+		$this->pa_files_table 		= $pa_files_table;
+		$this->pa_cat_table 		= $pa_cat_table;
+		$this->pa_config_table 		= $pa_config_table;
+		$this->pa_votes_table 		= $pa_votes_table;
+		$this->pa_comments_table 	= $pa_comments_table;
+		$this->pa_license_table 	= $pa_license_table;		
+		
+		$this->ext_name 			= 'orynider/pafiledb';
+		$this->module_root_path		= $this->ext_path = $ext_manager->get_extension_path($this->ext_name, true);
+		
+		//$this->cache_dir 				= $phpbb_container->getParameter('core.cache_dir'); 
+		$this->cache_dir 			= $this->module_root_path . 'cache/';	
+		
+		$this->filesystem 			= new \phpbb\filesystem\filesystem();		
+		
 		if (!is_dir($this->cache_dir))
 		{
 			@mkdir($this->cache_dir, 0777, true);
@@ -84,7 +144,7 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 	function pafiledb_cache($cache_dir = false)
 	{
 		global $phpbb_root_path;
-		global $mx_cache, $mx_root_path, $module_root_path, $is_block, $phpEx;
+		global $mx_cache, $mx_user, $mx_root_path, $module_root_path, $is_block, $phpEx;
 		
 		$this->module_root_path = !is_null($module_root_path) ? $module_root_path : $mx_root_path . 'modules/pafiledb/'; 
 		$this->cache_dir = !is_null($cache_dir) ? $cache_dir : $module_root_path . 'cache/';			
@@ -102,10 +162,130 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 	 */
 	function load()
 	{
-		global $phpEx;
-		@include( $this->cache_dir . 'data_global.' . $phpEx );
+		global $phpEx;	
+		
+		$this->cache_dir = !is_null($this->cache_dir) ? $this->cache_dir : $this->module_root_path . 'cache/';			
+				
+		if (!is_dir($this->cache_dir))
+		{
+			mkdir($this->cache_dir, 0777, true);
+		}
+		
+		//$this->message_die(GENERAL_ERROR, 'cache file ' . $this->cache_dir . "data_global.$phpEx" . ' couldn\'t be opened.');				 
+		if ((@include_once $this->cache_dir . "data_global.$phpEx") === false)
+		{			
+			$file = '<?php $this->vars=' . $this->format_array($this->vars) . ";\n\$this->vars_ts=" . $this->format_array($this->vars_ts) . ' ?>';
+			
+			if ($fp = fopen($this->cache_dir . "data_global.$phpEx", 'wb'))
+			{
+				@flock($fp, LOCK_EX);
+				fwrite($fp, $file);
+				@flock($fp, LOCK_UN);
+				fclose($fp);
+			}
+			else			
+			{			
+				$this->message_die(GENERAL_ERROR, 'cache file ' . $this->cache_dir . "data_global.$phpEx" . ' couldn\'t be opened.');
+			}
+			
+			include_once($this->cache_dir . "data_global.$phpEx");			
+		}		
+		
+		
 	}
+	
+	/**
+	* Obtain pafiledb config values
+	*/
+	public function config_values()
+	{		
+		if (($this->get('pafiledb_config')) === false)
+		{			
+			$pafiledb_config = $pafiledb_cached_config = array();
 
+			$sql = 'SELECT config_name, config_value, is_dynamic
+				FROM ' . $this->pa_config_table;
+			$result = $this->phpbb_db->sql_query($sql);
+
+			while ($row = $this->phpbb_db->sql_fetchrow($result))
+			{
+				if (!$row['is_dynamic'])
+				{
+					$pafiledb_cached_config[$row['config_name']] = $row['config_value'];
+				}				
+
+				$pafiledb_config[$row['config_name']] = $row['config_value'];
+			}
+			$this->phpbb_db->sql_freeresult($result);
+
+			$this->put('pafiledb_config', $pafiledb_cached_config);
+		}
+		else
+		{			
+			$sql = 'SELECT config_name, config_value
+				FROM ' . $this->pa_config_table . '
+				WHERE is_dynamic = 1';
+			$result = $this->db->sql_query($sql);
+
+			while ($row = $this->db->sql_fetchrow($result))
+			{
+				$pafiledb_config[$row['config_name']] = $row['config_value'];
+			}
+			$this->db->sql_freeresult($result);
+		}	
+		return $pafiledb_config;
+	}
+	
+	/**
+	* Set pafiledb config values
+	 *
+	 * @param unknown_type $config_name
+	 * @param unknown_type $config_value
+	 */
+	function set_config($key, $new_value, $use_cache = false)
+	{
+		// Read out config values
+		$pafiledb_config = $this->config_values();
+		$old_value = !isset($pafiledb_config[$key]) ? $pafiledb_config[$key] : false;		
+		$use_cache = (($key == 'comments_pagination') || ($key == 'pagination')) ? true : false;
+			
+		$sql = 'UPDATE ' . $this->pa_config_table . "
+			SET config_value = '" . $this->phpbb_db->sql_escape($new_value) . "'
+			WHERE config_name = '" . $this->phpbb_db->sql_escape($key) . "'";
+
+		if ($old_value !== false)
+		{
+			$sql .= " AND config_value = '" . $this->phpbb_db->sql_escape($old_value) . "'";
+		}
+
+		$this->phpbb_db->sql_query($sql);
+
+		if (!$this->phpbb_db->sql_affectedrows() && isset($pafiledb_config[$key]))
+		{
+			return false;
+		}
+
+		if (!isset($pafiledb_config[$key]))
+		{
+			$sql = 'INSERT INTO ' . $this->pa_config_table . ' ' . $this->phpbb_db->sql_build_array('INSERT', array(
+				'config_name'	=> $key,
+				'config_value'	=> $new_value,
+				'is_dynamic'	=> ($use_cache) ? 0 : 1));
+			$this->phpbb_db->sql_query($sql);
+		}
+		
+		$pafiledb_config[$key] = $new_value;
+
+		
+		if ($use_cache)
+		{
+			$this->destroy('config');
+			$this->put('config', $pafiledb_config);			
+		}
+		
+		return true;		
+	}
+	
 	/**
 	 * Enter description here...
 	 *
@@ -188,8 +368,10 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 	 * @return unknown
 	 */
 	function get( $varname, $expire_time = 0 )
-	{
-		return ( $this->exists( $varname, $expire_time ) ) ? $this->vars[$varname] : null;
+	{	
+		$varname_exists = $this->exists($varname, $expire_time);
+		
+		return ($varname_exists) ? $this->vars[$varname] : null;
 	}
 
 	/**
@@ -306,7 +488,7 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 	 * @param unknown_type $expire_time
 	 * @return unknown
 	 */
-	function exists( $varname, $expire_time = 0 )
+	function exists($varname, $expire_time = 0)
 	{
 		if ( !is_array( $this->vars ) )
 		{
@@ -338,7 +520,9 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 		if ($varname[0] == '_')
 		{
 			global $phpEx;
+			
 			$var_name = $this->clean_varname($varname);
+			
 			return file_exists($this->cache_dir . 'data' . $varname . ".$phpEx");
 		}
 		else
@@ -701,7 +885,108 @@ class pafiledb_cache extends \phpbb\cache\driver\base
 			}
 
 			return $data;
+		}			
+	}
+
+	/**
+	 * Dummy function
+	 */
+	function message_die($msg_code, $msg_text = '', $msg_title = '', $err_line = '', $err_file = '', $sql = '')
+	{		
+		//
+		// Get SQL error if we are debugging. Do this as soon as possible to prevent
+		// subsequent queries from overwriting the status of sql_error()
+		//
+		if (DEBUG && ($msg_code == GENERAL_ERROR || $msg_code == CRITICAL_ERROR))
+		{
+				
+			if ( isset($sql) )
+			{
+				//$sql_error = array(@print_r(@$this->db->sql_error($sql)));				
+				$sql_error['message'] = $sql_error['message'] ? $sql_error['message'] : '<br /><br />SQL : ' . $sql; 
+				$sql_error['code'] = $sql_error['code'] ? $sql_error['code'] : 0;			
+			}
+			else
+			{
+				$sql_error = array(@print_r(@$this->phpbb_db->sql_error_returned));				
+				$sql_error['message'] = $sql_error['message'] ? $sql_error['message'] : '<br /><br />SQL : ' . $sql; 
+				$sql_error['code'] = $sql_error['code'] ? $sql_error['code'] : 0;					
+			}			
+			
+			$debug_text = '';
+
+			if ( isset($sql_error['message']) )
+			{
+				$debug_text .= '<br /><br />SQL Error : ' . $sql_error['code'] . ' ' . $sql_error['message'];
+			}
+
+			if ( isset($sql_store) )
+			{
+				$debug_text .= "<br /><br />$sql_store";
+			}
+
+			if ( isset($err_line) && isset($err_file) )
+			{
+				$debug_text .= '</br /><br />Line : ' . $err_line . '<br />File : ' . $err_file;
+			}
+		}		
+		
+		switch($msg_code)
+		{
+			case GENERAL_MESSAGE:
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('Information');
+				}
+			break;
+
+			case CRITICAL_MESSAGE:
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('Critical_Information');
+				}
+			break;
+
+			case GENERAL_ERROR:
+				if ( $msg_text == '' )
+				{
+					$msg_text = $this->user->lang('An_error_occured');
+				}
+
+				if ( $msg_title == '' )
+				{
+					$msg_title = $this->user->lang('General_Error');
+				}
+			break;
+
+			case CRITICAL_ERROR:
+
+				if ($msg_text == '')
+				{
+					$msg_text = $this->user->lang('A_critical_error');
+				}
+
+				if ($msg_title == '')
+				{
+					$msg_title = 'phpBB : <b>' . $this->user->lang('Critical_Error') . '</b>';
+				}
+			break;
 		}
+		
+		//
+		// Add on DEBUG info if we've enabled debug mode and this is an error. This
+		// prevents debug info being output for general messages should DEBUG be
+		// set TRUE by accident (preventing confusion for the end user!)
+		//
+		if ( DEBUG && ( $msg_code == GENERAL_ERROR || $msg_code == CRITICAL_ERROR ) )
+		{
+			if ( $debug_text != '' )
+			{
+				$msg_text = $msg_text . '<br /><br /><b><u>DEBUG MODE</u></b> ' . $debug_text;
+			}
+		}		
+		
+		trigger_error($msg_title . ': ' . $msg_text);
 	}
 
 	/**

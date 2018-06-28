@@ -10,6 +10,7 @@
 namespace orynider\pafiledb\core;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use orynider\pafiledb\core\pafiledb_cache;
 
 // SQL codes phpBB2
 @define('BEGIN_TRANSACTION', 1);
@@ -162,33 +163,36 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	
 	protected $pa_comments_table;
 	
-	protected $pa_license_table;	
+	protected $pa_license_table;
+
+	protected $pa_auth_access_table;
+
+	protected $pa_mirrors_table;	
 	
 	/**
 	* Constructor
 	*
-	* @param \phpbb\template\template		 		$template
-	* @param \phpbb\user						$user
-	* @param \phpbb\db\driver\driver_interface		$db
-	* @param \phpbb\controller\helper		 		$helper
-	* @param \phpbb\request\request		 		$request
-	* @param \phpbb\auth\auth			 		$auth	
-	* @param \phpbb\cache\service					$cache
-
-	
+	* @param \phpbb\template\template		 			$template
+	* @param \phpbb\user							$user
+	* @param \phpbb\cache\service 					$cache phpBB cache driver
+	* @param \phpbb\controller\helper		 			$helper
+	* @param \phpbb\request\request		 			$request
+	* @param \phpbb\auth\auth			 			$auth	
+	* @param \phpbb\cache\service					$cache	
 	* @param \orynider\pafiledb\core\functions_cache		$functions_cache		
 	* @param \phpbb\config\config					$config
-	* @param ContainerInterface                    			$container		
-	* @param \phpbb\pagination					$pagination
+	* @param ContainerInterface                    				$container		
+	* @param \phpbb\pagination						$pagination
 	* @param \phpbb\extension\manager 				$extension_manager
-	* @param								$php_ext
-	* @param								$root_path
-	* @param								$pa_files_table
-	* @param								$pa_cat_table
-	* @param								$pa_config_table
-	* @param								$pa_votes_table
-	* @param								$pa_comments_table
-	* @param								$pa_license_table	
+	* @param									$php_ext
+	* @param									$root_path
+	* @param									$pa_files_table
+	* @param									$pa_cat_table
+	* @param									$pa_config_table
+	* @param									$pa_votes_table
+	* @param									$pa_comments_table
+	* @param									$pa_license_table
+	* @param									$pa_mirrors_table	
 	*
 	*/
 	public function __construct(
@@ -198,21 +202,25 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		\phpbb\controller\helper $helper,
 		\phpbb\request\request $request,
 		\phpbb\auth\auth $auth,			
-		\phpbb\cache\driver\driver_interface $cache,
+		\phpbb\cache\driver\file $cache,
 		\orynider\pafiledb\core\pafiledb_cache $pafiledb_cache,
 		\orynider\pafiledb\core\pafiledb_templates $pafiledb_templates,		
 		\phpbb\config\config $config,		
 		\phpbb\pagination $pagination,
-		\phpbb\extension\manager $extension_manager, ContainerInterface $container,
+		\phpbb\extension\manager $extension_manager, 
+		ContainerInterface $container,
+		
 		$php_ext, 
 		$root_path,
+		
 		$pa_files_table,
 		$pa_cat_table,
 		$pa_config_table, 
 		$pa_votes_table,
 		$pa_comments_table,
 		$pa_license_table,
-		$pa_auth_access_table)
+		$pa_auth_access_table,
+		$pa_mirrors_table)
 	{
 		$this->template 			= $template;
 		$this->user 				= $user;
@@ -228,9 +236,11 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		$this->pagination 			= $pagination;
 		$this->extension_manager	= $extension_manager;
 		$this->php_ext 				= $php_ext;
+		
 		$this->root_path 			= $root_path;
 		$this->mx_root_path 		= $root_path;		
 		$this->phpbb_root_path 		= $root_path;		
+		
 		$this->pa_files_table 		= $pa_files_table;
 		$this->pa_cat_table 		= $pa_cat_table;
 		$this->pa_config_table 		= $pa_config_table;
@@ -238,13 +248,14 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		$this->pa_comments_table 	= $pa_comments_table;		
 		$this->pa_license_table 	= $pa_license_table;		
 		$this->pa_auth_access_table = $pa_auth_access_table;		
+		$this->pa_mirrors_table		= $pa_mirrors_table;
 		
 		$this->ext_name 			= $this->request->variable('ext_name', 'orynider/pafiledb');
 		$this->module_root_path		= $this->ext_path = $extension_manager->get_extension_path($this->ext_name, true);
 		
 		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
-		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
-				
+		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );		
+		
 		if (!function_exists('submit_post'))
 		{
 			include($this->root_path . 'includes/functions_posting.' . $this->php_ext);
@@ -275,7 +286,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			FROM ' . $this->pa_cat_table . '
 			ORDER BY cat_order ASC';
 
-		if ( !( $result = $this->db->sql_query( $sql ) ) )
+		if ( !( $result = $this->db->sql_query($sql) ) )
 		{
 			$this->message_die(GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql);
 		}
@@ -283,7 +294,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		$cat_rowset = $this->db->sql_fetchrowset($result);
 		$this->db->sql_freeresult($result);
 
-		$this->auth($cat_rowset);
+		$this->auth($cat_rowset, '', $pa_auth_access_table);
 		//print_r($this->auth_user);
 		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
 		{
@@ -342,12 +353,17 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 				$this->notification[$cat_rowset[$i]['cat_id']]['notify_group'] = $cat_rowset[$i]['notify_group'] == -1 || $cat_rowset[$i]['notify_group'] == 0 ? (intval($pafiledb_config['notify_group'])) : ( intval($cat_rowset[$i]['notify_group']) ); // Group_id
 			}
 		}
-		//print_r($this->cat_rowset);		
-	}	
+		//print_r($this->cat_rowset);	
+		//print_r($this->cache->get('pafiledb_config'));		
+	}
 	
+	/**
+	* Constructor
+	*
+	*/	
 	public function pafiledb()
 	{
-		global $mx_cache, $pafiledb_cache, $mx_request_vars, $template, $mx_user, $db;  
+		global $mx_cache, $mx_pagination, $pafiledb_cache, $mx_request_vars, $template, $mx_user, $db;  
 		global $board_config, $phpEx, $phpbb_root_path, $mx_root_path, $module_root_path;		
 			
 		$this->template 			= $template;
@@ -359,13 +375,15 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		$this->cache 				= $mx_cache;
 		$this->pafiledb_cache 		= $pafiledb_cache;		
 		$this->config 				= $config;
-		$this->pagination 			= $mx_cache;
+		$this->pagination 			= $mx_pagination;
 		$this->extension_manager	= $mx_cache;
 		$this->php_ext 				= $phpEx;
+		
 		$this->root_path 			= $mx_root_path;
 		$this->mx_root_path 		= $mx_root_path;
 		$this->module_root_path 	= $module_root_path;		
 		$this->phpbb_root_path 		= $phpbb_root_path;		
+		
 		$this->pa_files_table 		= PA_FILES_TABLE;
 		$this->pa_cat_table 		= PA_CAT_TABLE;
 		$this->pa_config_table 		= PA_CONFIG_TABLE;
@@ -414,7 +432,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 
 		$this->auth($cat_rowset);
 
-		for( $i = 0; $i < count( $cat_rowset ); $i++ )
+		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
 		{
 			if ( $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
 			{
@@ -469,7 +487,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 				$this->notification[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['notify'] == -1 ? (intval($pafiledb_config['notify'])) : ( intval($cat_rowset[$i]['notify']) ); // -1, 0, 1, 2
 				$this->notification[$cat_rowset[$i]['cat_id']]['notify_group'] = $cat_rowset[$i]['notify_group'] == -1 || $cat_rowset[$i]['notify_group'] == 0 ? (intval($pafiledb_config['notify_group'])) : ( intval($cat_rowset[$i]['notify_group']) ); // Group_id
 			}
-		}
+		}	
 	}
 
 	/**
@@ -495,7 +513,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			FROM ' . $this->pa_category_table . '
 			ORDER BY cat_order ASC';
 
-		if ( !( $result = $db->sql_query( $sql ) ) )
+		if ( !( $result = $this->db->sql_query( $sql ) ) )
 		{
 			$this->message_die( GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql );
 		}
@@ -504,8 +522,9 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		$this->db->sql_freeresult( $result );
 
 		$this->auth($cat_rowset);
+		
 		//print_r($this->auth_user);
-		for( $i = 0; $i < count( $cat_rowset ); $i++ )
+		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
 		{
 			if ( $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
 			{
@@ -562,6 +581,125 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			}
 		}
 	}
+	
+	/**
+	* Obtain pafiledb config values
+	*/
+	public function config_values()
+	{		
+		if (($this->pafiledb_cache->get('pafiledb_config')) === false)
+		{
+			$pafiledb_config = $pafiledb_cached_config = array();
+
+			$sql = 'SELECT config_name, config_value, is_dynamic
+				FROM ' . $this->pa_config_table;
+			$result = $this->db->sql_query($sql);
+
+			while ($row = $this->db->sql_fetchrow($result))
+			{
+				if (!$row['is_dynamic'])
+				{
+					$pafiledb_cached_config[$row['config_name']] = $row['config_value'];
+				}				
+
+				$pafiledb_config[$row['config_name']] = $row['config_value'];
+			}
+			$this->db->sql_freeresult($result);
+
+			$this->pafiledb_cache->put('pafiledb_config', $pafiledb_cached_config);
+		}
+		else
+		{
+			$sql = 'SELECT config_name, config_value
+				FROM ' . $this->pa_config_table . '
+				WHERE is_dynamic = 1';
+			$result = $this->db->sql_query($sql);
+
+			while ($row = $this->db->sql_fetchrow($result))
+			{
+				$pafiledb_config[$row['config_name']] = $row['config_value'];
+			}
+			$this->db->sql_freeresult($result);
+		}				
+		return $pafiledb_config;
+	}
+	
+	/**
+	* Set pafiledb config values
+	 *
+	 * @param unknown_type $config_name
+	 * @param unknown_type $config_value
+	 */
+	function set_config($key, $new_value, $use_cache = false)
+	{
+		// Read out config values
+		$pafiledb_config = $this->config_values();
+		$old_value = !isset($pafiledb_config[$key]) ? $pafiledb_config[$key] : false;		
+		$use_cache = (($key == 'comments_pagination') || ($key == 'pagination')) ? true : false;
+			
+		$sql = 'UPDATE ' . $this->pa_config_table . "
+			SET config_value = '" . $this->db->sql_escape($new_value) . "'
+			WHERE config_name = '" . $this->db->sql_escape($key) . "'";
+
+		if ($old_value !== false)
+		{
+			$sql .= " AND config_value = '" . $this->db->sql_escape($old_value) . "'";
+		}
+
+		$this->db->sql_query($sql);
+
+		if (!$this->db->sql_affectedrows() && isset($pafiledb_config[$key]))
+		{
+			return false;
+		}
+
+		if (!isset($pafiledb_config[$key]))
+		{
+			$sql = 'INSERT INTO ' . $this->pa_config_table . ' ' . $this->db->sql_build_array('INSERT', array(
+				'config_name'	=> $key,
+				'config_value'	=> $new_value,
+				'is_dynamic'	=> ($use_cache) ? 0 : 1));
+			$this->db->sql_query($sql);
+		}
+		
+		$pafiledb_config[$key] = $new_value;
+
+		
+		if ($use_cache)
+		{
+			$this->pafiledb_cache->destroy('config');
+			$this->pafiledb_cache->put('config', $pafiledb_config);			
+		}
+		
+		return true;		
+	}
+
+	/**
+	* Obtain pafiledb config values
+	 * decapritated
+	 * @return unknown
+	 */
+	function pafiledb_config()
+	{
+		$pafiledb_config = array();		
+		
+		$sql = "SELECT *
+			FROM " . $this->pa_config_table;
+
+		if ( !( $result = $this->db->sql_query($sql) ) )
+		{
+			$this->message_die(GENERAL_ERROR, 'Couldnt query pafiledb configuration', '', __LINE__, __FILE__, $sql );
+		}
+
+		while ( $row = $this->db->sql_fetchrow( $result ) )
+		{
+			$pafiledb_config[$row['config_name']] = trim( $row['config_value'] );
+		}
+
+		$this->db->sql_freeresult($result);
+
+		return ( $pafiledb_config );
+	}	
 	
 	/**
 	 * Clean up
@@ -666,6 +804,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			case 'phpbb3':
 			case 'olympus':	
 			case 'ascraeus':
+			case 'rhea':			
 			case 'proteus':
 			default:
 				// Get us all the groups exept bots and guests
@@ -2008,15 +2147,15 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			// ===================================================
 			if (!$file_rowset[$i]['file_disable'])
 			{
-				$dl_link_jump = append_sid( $this->mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'], true, false ) );
-				$dl_link_jump_save_as = append_sid( $this->mxurl( 'action=download&file_id=' . $file_rowset[$i]['file_id'] . '&save_as', true, false ) );
+				$dl_link_jump = append_sid( $this->mxurl('action=download&file_id=' . $file_rowset[$i]['file_id'], true, false) );
+				$dl_link_jump_save_as = append_sid( $this->mxurl('action=download&file_id=' . $file_rowset[$i]['file_id'] . '&save_as', true, false) );
 			}
 			else
 			{
 				$dl_link_jump = $dl_link_jump_save_as = "javascript:disable_popup(".$file_rowset[$i]['file_id'].")";
 			}
 
-			$this->template->assign_block_vars( "file_rows", array(
+			$this->template->assign_block_vars("file_rows", array(
 				'L_NEW_FILE' => $this->user->lang['New_file'],
 				'L_SAVE_AS' => $this->user->lang['Save_as'],
 				'PIN_IMAGE' => $posticon,
@@ -2079,49 +2218,49 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 
 			$filelist = true;
 			$pa_use_ratings = $this->ratings[$file_rowset[$i]['file_catid']]['activated'];
-		}
-
+		}		
+		
 		if ( $filelist )
 		{
 			$action = ( empty( $cat_id ) ) ? 'viewall' : 'category&amp;cat_id=' . $cat_id;
 			$this->template->assign_vars( array(
-				'FILELIST' => $filelist,
-				'ORIGINAL_STYLE' => false,
+				'FILELIST' 					=> $filelist,
+				'ORIGINAL_STYLE' 			=> false,
 
-				'L_CATEGORY' => $this->user->lang['Category'],
-				'L_VOTES' => $this->user->lang['Votes'],
-				'L_DOWNLOADS' => $this->user->lang['Dls'],
-				'L_SUBMITED_BY' => $this->user->lang['Submiter'],
-				'L_DATE' => $this->user->lang['Date'],
-				'L_NAME' => $this->user->lang['Name'],
-				'L_FILE' => $this->user->lang['File'],
-				'L_FILES' => $this->user->lang['Files'],
-				'L_UPDATE_TIME' => $this->user->lang['Update_time'],
-				'L_SCREENSHOTS' => $this->user->lang['Scrsht'],
+				'L_CATEGORY' 				=> $this->user->lang['Category'],
+				'L_VOTES' 					=> $this->user->lang['Votes'],
+				'L_DOWNLOADS' 				=> $this->user->lang['Dls'],
+				'L_SUBMITED_BY' 			=> $this->user->lang['Submiter'],
+				'L_DATE' 					=> $this->user->lang['Date'],
+				'L_NAME' 					=> $this->user->lang['Name'],
+				'L_FILE' 					=> $this->user->lang['File'],
+				'L_FILES' 					=> $this->user->lang['Files'],
+				'L_UPDATE_TIME' 			=> $this->user->lang['Update_time'],
+				'L_SCREENSHOTS' 			=> $this->user->lang['Scrsht'],
 
-				'L_SELECT_SORT_METHOD' => $this->user->lang['Select_sort_method'],
+				'L_SELECT_SORT_METHOD' 		=> $this->user->lang['Select_sort_method'],
 				
-				'L_ORDER' => $this->user->lang['Order'],
-				'L_SORT' => $this->user->lang['Sort'],
+				'L_ORDER' 					=> $this->user->lang['Order'],
+				'L_SORT' 					=> $this->user->lang['Sort'],
 
-				'L_ASC' => $this->user->lang['Sort_Ascending'],
-				'L_DESC' => $this->user->lang['Sort_Descending'],
+				'L_ASC' 					=> $this->user->lang['Sort_Ascending'],
+				'L_DESC' 					=> $this->user->lang['Sort_Descending'],
 
-				'SORT_NAME' => ( $sort_method == 'file_name' ) ? 'selected="selected"' : '',
-				'SORT_TIME' => ( $sort_method == 'file_time' ) ? 'selected="selected"' : '',
-				'SORT_RATING' => ( $sort_method == 'rating' ) ? 'selected="selected"' : '',
-				'SORT_DOWNLOADS' => ( $sort_method == 'file_dls' ) ? 'selected="selected"' : '',
-				'SORT_UPDATE_TIME' => ( $sort_method == 'file_update_time' ) ? 'selected="selected"' : '',
+				'SORT_NAME' 				=> ( $sort_method == 'file_name' ) ? 'selected="selected"' : '',
+				'SORT_TIME' 				=> ( $sort_method == 'file_time' ) ? 'selected="selected"' : '',
+				'SORT_RATING' 				=> ( $sort_method == 'rating' ) ? 'selected="selected"' : '',
+				'SORT_DOWNLOADS' 			=> ( $sort_method == 'file_dls' ) ? 'selected="selected"' : '',
+				'SORT_UPDATE_TIME'			=> ( $sort_method == 'file_update_time' ) ? 'selected="selected"' : '',
 
-				'SORT_ASC' => ( $sort_order == 'ASC' ) ? 'selected="selected"' : '',
-				'SORT_DESC' => ( $sort_order == 'DESC' ) ? 'selected="selected"' : '',
-				'PAGINATION' => $this->generate_pagination( append_sid( $this->mxurl( "action=$action&amp;sort_method=$sort_method&amp;sort_order=$sort_order" ) ), $total_file, $pafiledb_config['pagination'], $start ),
-				'PAGE_NUMBER' => sprintf( $this->user->lang['Page_of'], ( floor( $start / $pafiledb_config['pagination'] ) + 1 ), ceil( $total_file / $pafiledb_config['pagination'] ) ),
-				'ID' => $cat_id,
-				'START' => $start,
-				'SHOW_RATINGS' => ( $pa_use_ratings ) ? true : false,
+				'SORT_ASC' 					=> ( $sort_order == 'ASC' ) ? 'selected="selected"' : '',
+				'SORT_DESC' 				=> ( $sort_order == 'DESC' ) ? 'selected="selected"' : '',
+				'PAGINATION'				=> $this->pagination->generate_template_pagination(append_sid( $this->mxurl( "action=$action&amp;sort_method=$sort_method&amp;sort_order=$sort_order" ) ), 'pagination', 'page', $total_file, $pafiledb_config['pagination'], $start),				
+				'PAGE_NUMBER' 				=> sprintf( $this->user->lang['Page_of'], ( floor( $start / $pafiledb_config['pagination'] ) + 1 ), ceil( $total_file / $pafiledb_config['pagination'] ) ),
+				'ID' 						=> $cat_id,
+				'START' 					=> $start,
+				'SHOW_RATINGS' 				=> ( $pa_use_ratings ) ? true : false,
 
-				'S_ACTION_SORT' => append_sid( $this->mxurl( "action=$action" ) ) )
+				'S_ACTION_SORT' 			=> append_sid( $this->mxurl( "action=$action" ) ) )
 			);
 		}
 		else
@@ -2166,126 +2305,6 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		));
 
 		return;
-	}
-
-	/**
-	* Obtain pafiledb config values
-	*/
-	public function config_values()
-	{
-		if (($this->cache->get('pafiledb_config')) === false)
-		{
-			$pafiledb_config = $pafiledb_cached_config = array();
-
-			$sql = 'SELECT config_name, config_value, is_dynamic
-				FROM ' . $this->pa_config_table;
-			$result = $this->db->sql_query($sql);
-
-			while ($row = $this->db->sql_fetchrow($result))
-			{
-				if (!$row['is_dynamic'])
-				{
-					$pafiledb_cached_config[$row['config_name']] = $row['config_value'];
-				}				
-
-				$pafiledb_config[$row['config_name']] = $row['config_value'];
-			}
-			$this->db->sql_freeresult($result);
-
-			$this->cache->put('pafiledb_config', $pafiledb_cached_config);
-		}
-		else
-		{
-			$sql = 'SELECT config_name, config_value
-				FROM ' . $this->pa_config_table . '
-				WHERE is_dynamic = 1';
-			$result = $this->db->sql_query($sql);
-
-			while ($row = $this->db->sql_fetchrow($result))
-			{
-				$pafiledb_config[$row['config_name']] = $row['config_value'];
-			}
-			$this->db->sql_freeresult($result);
-		}		
-		
-		return $pafiledb_config;
-	}
-	
-	/**
-	* Set pafiledb config values
-	 *
-	 * @param unknown_type $config_name
-	 * @param unknown_type $config_value
-	 */
-	function set_config($key, $new_value, $use_cache = false)
-	{
-		// Read out config values
-		$pafiledb_config = $this->config_values();
-		$old_value = !isset($pafiledb_config[$key]) ? $pafiledb_config[$key] : false;		
-		$use_cache = (($key == 'comments_pagination') || ($key == 'pagination')) ? true : false;
-			
-		$sql = 'UPDATE ' . $this->pa_config_table . "
-			SET config_value = '" . $this->db->sql_escape($new_value) . "'
-			WHERE config_name = '" . $this->db->sql_escape($key) . "'";
-
-		if ($old_value !== false)
-		{
-			$sql .= " AND config_value = '" . $this->db->sql_escape($old_value) . "'";
-		}
-
-		$this->db->sql_query($sql);
-
-		if (!$this->db->sql_affectedrows() && isset($pafiledb_config[$key]))
-		{
-			return false;
-		}
-
-		if (!isset($pafiledb_config[$key]))
-		{
-			$sql = 'INSERT INTO ' . $this->pa_config_table . ' ' . $this->db->sql_build_array('INSERT', array(
-				'config_name'	=> $key,
-				'config_value'	=> $new_value,
-				'is_dynamic'	=> ($use_cache) ? 0 : 1));
-			$this->db->sql_query($sql);
-		}
-		
-		$pafiledb_config[$key] = $new_value;
-
-		
-		if ($use_cache)
-		{
-			$this->cache->destroy('config');
-			$this->cache->put('config', $pafiledb_config);			
-		}
-		
-		return true;		
-	}
-
-	/**
-	* Obtain pafiledb config values
-	 * decapritated
-	 * @return unknown
-	 */
-	function pafiledb_config()
-	{
-		$pafiledb_config = array();		
-		
-		$sql = "SELECT *
-			FROM " . $this->pa_config_table;
-
-		if ( !( $result = $this->db->sql_query($sql) ) )
-		{
-			$this->message_die(GENERAL_ERROR, 'Couldnt query pafiledb configuration', '', __LINE__, __FILE__, $sql );
-		}
-
-		while ( $row = $this->db->sql_fetchrow( $result ) )
-		{
-			$pafiledb_config[$row['config_name']] = trim( $row['config_value'] );
-		}
-
-		$this->db->sql_freeresult($result);
-
-		return ( $pafiledb_config );
 	}
 
 	/**
@@ -2337,16 +2356,16 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		// Read out config values
 		$pafiledb_config = $this->config_values();		
 		
+		$cat_id = $this->request->variable('cat_id', 0);		
+		
 		if ( $action != 'download' )
 		{
 			//page_header($page_title);
 		}
 		
-		$cat_id = $this->request->variable('cat_id', 0);
-		
 		if ( $cat_id )
 		{
-			$upload_url 	= append_sid($this->helper->route('orynider_pafiledb_controller_upload', array('cat_id' => $cat_id)) );
+			$upload_url 	= append_sid($this->helper->route('orynider_pafiledb_controller_user_upload', array('cat_id' => $cat_id)) );
 			$mcp_url 		= append_sid($this->helper->route('orynider_pafiledb_controller_mcp', array('cat_id' => $cat_id)) );
 
 			$upload_auth 	= $this->auth_user[$cat_id]['auth_upload'];
@@ -2354,7 +2373,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		}
 		else
 		{
-			$upload_url = $this->helper->route('orynider_pafiledb_controller_upload');
+			$upload_url = $this->helper->route('orynider_pafiledb_controller_user_upload');
 			//append_sid( $this->mxurl( "action=user_upload" ) );
 			
 			// Generate the sub categories list 
@@ -2425,6 +2444,7 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 		
 		$module_manager = $this->extension_manager->create_extension_metadata_manager('orynider/pafiledb', $this->template);
 		$meta = $module_manager->get_metadata();
+		
 		$authors_names = array();
 		$authors_homepages = array();
 
@@ -2712,26 +2732,43 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	 * @param unknown_type $url
 	 * @param unknown_type $img
 	 */
-	function create_button($key, $label, $url)
-	{
-		$this_buttontype = MX_BUTTON_IMAGE;
-
-		switch($this_buttontype)
+	function create_button($key, $label, $url, $img = '', $alt = '', $type = 'image')
+	{	
+		switch($type)
 		{
-			case MX_BUTTON_TEXT:
-				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			case 'text':
+				$this_buttontype = MX_BUTTON_TEXT;
 			break;
 
-			case MX_BUTTON_IMAGE:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			case 'image':
+				$this_buttontype = MX_BUTTON_IMAGE;
 			break;
 
-			case MX_BUTTON_GENERIC:
-				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			case 'generic':
+				$this_buttontype = MX_BUTTON_GENERIC;
 			break;
 
 			default:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+				$this_buttontype = $type;
+			break;
+		}
+		
+		switch($this_buttontype)
+		{
+			case MX_BUTTON_TEXT:
+				return '<a class="text button" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			case MX_BUTTON_IMAGE:
+				return '<a class="image button" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+
+			case MX_BUTTON_GENERIC:
+				return '<a class="generic button" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			default:
+				return '<a class="' . $type . ' button" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
 			break;
 		}
 	}
@@ -2751,26 +2788,43 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	 * @param unknown_type $url
 	 * @param unknown_type $img
 	 */
-	function create_icon($key, $label, $url)
-	{
-		$this_buttontype = MX_BUTTON_IMAGE;
-
-		switch($this_buttontype)
+	function create_icon($key, $label, $url, $img = '', $alt = '', $type = 'image')
+	{	
+		switch($type)
 		{
-			case MX_BUTTON_TEXT:
-				return '<a class="textbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			case 'text':
+				$this_buttontype = MX_BUTTON_TEXT;
 			break;
 
-			case MX_BUTTON_IMAGE:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			case 'image':
+				$this_buttontype = MX_BUTTON_IMAGE;
 			break;
 
-			case MX_BUTTON_GENERIC:
-				return '<a class="genericbutton" href="'. $url .'"><span>' . $label . '</span></a>';
+			case 'generic':
+				$this_buttontype = MX_BUTTON_GENERIC;
 			break;
 
 			default:
-				return '<a class="imagebutton" href="'. $url .'"><img src = "' . $this->templates->img($key, '', false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+				$this_buttontype = $type;
+			break;
+		}
+		
+		switch($this_buttontype)
+		{
+			case MX_BUTTON_TEXT:
+				return '<a class="text button" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			case MX_BUTTON_IMAGE:
+				return '<a class="image button" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
+			break;
+
+			case MX_BUTTON_GENERIC:
+				return '<a class="generic button" href="'. $url .'"><span>' . $label . '</span></a>';
+			break;
+
+			default:
+				return '<a class="' . $type . ' button" href="'. $url .'"><img src = "' . $this->templates->img($key, $label, false, '', 'src') . '" alt="' . $label . '" title="' . $label . '" border="0"></a>';
 			break;
 		}
 	}
@@ -3227,7 +3281,8 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	}	
 	
 	/**
-	 * Enter description here...
+	 * MX URL Fix
+	 * Temporary solution to handle addons urls 
 	 *
 	 * @param unknown_type $args
 	 * @param unknown_type $force_standalone_mode
@@ -3236,32 +3291,89 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	 */
 	function mxurl($args = '', $force_standalone_mode = false, $non_html_amp = false, $is_block = true)
 	{
-		$pageId = $this->request->variable('page_id', 1);
-		$dynamicId = !empty($_GET['dynamic_block']) ? ( $non_html_amp ? '&dynamic_block=' : '&amp;dynamic_block=' ) . $this->request->variable('dynamic_block') : '';
+		$pageId 		= $this->request->variable('page_id', 1);
+		$dynamicId 		= isset($_GET['dynamic_block']) ? ( $non_html_amp ? '&dynamic_block=' : '&amp;dynamic_block=' ) . $this->request->variable('dynamic_block') : '';
 		
-		$args = $args ? $args : func_get_args();		
-		$args .= ($args == '' ? '' : '&' ) . 'modrewrite=no';
+		$actions_args 	= isset($args) ? @explode('&', $args) : '';
+		
+		$action_arg1st 	= isset($actions_args[0]) ? @explode('=', $actions_args[0]) : '';			
+		$action_arg2nd 	= isset($actions_args[1]) ? @explode('=', $actions_args[1]) : '';
+		$action_arg3rd 	= isset($actions_args[2]) ? @explode('=', $actions_args[2]) : '';		
+		
+		$action 		= ($action_arg1st[0] == 'action') ? $action_arg1st[1] : $this->request->variable('action', '');
+		
+		$do 			= ($action_arg1st[0] == 'do') ? $action_arg1st[1] : $this->request->variable('do', '');				
+		$do 			= ($action_arg2nd[0] == 'do') ? $action_arg2nd[1] : $this->request->variable('do', $do);
+		$do 			= ($action_arg3rd[0] == 'do') ? $action_arg3rd[1] : $this->request->variable('do', $do);
+			
+		$file_id 		= ($action_arg2nd[0] == 'file_id') ? $action_arg2nd[1] : $this->request->variable('file_id', '');
+		$file_id 		= ($action_arg3rd[0] == 'file_id') ? $action_arg3rd[1] : $file_id;		
+		
+		$cat_id 		= ($action_arg2nd[0] == 'cat_id') ? $action_arg2nd[1] : $this->request->variable('cat_id', '');		
+		$cat_id 		= ($action_arg3rd[0] == 'cat_id') ? $action_arg3rd[1] : $cat_id;				
+		
+		if ( ($cat_id == 0) && ($file_id !== 0) )
+		{
+			$sql = "SELECT file_catid
+				FROM " . $this->pa_files_table . "
+				WHERE file_id = '" . $file_id . "'";
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->message_die( GENERAL_ERROR, 'Couldnt query download file category', '', __LINE__, __FILE__, $sql );
+			}
+			$file_data = $this->db->sql_fetchrow($result);
+			$this->db->sql_freeresult($result);
+			
+			$cat_id = $file_data['file_catid'];			
+		}
+		
+		$use_action = isset($action) ? '_' . str_replace('category', 'cat', $action) : '';		
+		
+		$use_cat_or_file_array = ((isset($cat_id) && !isset($file_id)) || (!isset($cat_id) && isset($file_id))) ? true : false;					
+		$use_cat_and_file_array = isset($cat_id) && isset($file_id) ? true : false;		
+		
+		$use_cat_array = ($use_cat_file_array == false) && isset($cat_id) ? true : false;	
+		$use_action_do_array = isset($action) && isset($do) ? true : false;
+		
+		$route_cat_or_file_array = (($use_cat_or_file_array == true) && ($use_cat_array == true)) ? array('cat_id' => $cat_id) : ( (($use_cat_or_file_array == true) && ($use_file_array == true )) ? array('file_id' => $file_id) : array('action' => $action) );
+		$route_cat_and_file_array = ($use_cat_and_file_array == true) ? array('cat_id' => $cat_id, 'file_id' => $file_id) : $route_cat_or_file_array;	
+		
+		$route_action_do_file_array = (($use_action_do_array == true) && ($use_file_array == true)) ? array('action' => $action, 'do' => $do, 'file_id' => $file_id) : ((($use_action_do_array == true) && ($use_cat_array == true)) ? array('action' => $action, 'do' => $do, 'file_id' => $file_id) : $route_cat_and_file_array);
+					
+		$route_array = ($use_action_do_array == true && is_array($route_action_do_file_array)) ? $route_action_do_file_array : $route_cat_and_file_array;		
+		
+		$this->backend = $this->confirm_backend(true);			
 		
 		if ( !MXBB_MODULE )
 		{
-			// Incomplete update?
-			if (phpbb_version_compare('3.1', PHPBB_VERSION, '<'))
+			// Incomplete update? func_get_args()
+			switch ($this->backend)
 			{
-				$mxurl = $this->module_root_path . 'dload.' . $this->php_ext . ( $args == '' ? '' : '?' . $args );					
-			}
-			else			
-			{
-				$mxurl = generate_board_url() . ( $args == '' ? '' : '?' . $args );					
+				case 'internal':				
+				case 'phpbb2':			
+				case 'olympus':			
+					$mxurl = $this->module_root_path . 'dload.' . $this->php_ext . ( $args == '' ? '' : '?' . $args );					
+			
+				break;			
+				
+				case 'phpbb3':	
+				case 'ascraeus':
+				case 'rhea':				
+				case 'proteus':
+				default:
+					$mxurl = $args == '' ? append_sid( $this->get_formated_url(false) . $this->helper->route('orynider_pafiledb_controller') ) : append_sid( $this->get_formated_url(false) . $this->helper->route('orynider_pafiledb_controller'.$use_action, $route_array) );
+					
+				break;			
 			}			
-			return $mxurl;
-		}
-
-		if ( $force_standalone_mode || !$is_block )
+		}		
+		elseif ( $force_standalone_mode || !$is_block )
 		{
+			$args .= ($args == '' ? '' : '&' ) . 'modrewrite=no';
 			$mxurl = $this->module_root_path . 'dload.' . $this->php_ext . ( $args == '' ? '' : '?' . $args );
 		}
 		else
 		{
+			$args .= ($args == '' ? '' : '&' ) . 'modrewrite=no';
 			$mxurl = $this->mx_root_path . 'index.' . $this->php_ext;
 			if ( is_numeric( $pageId ) )
 			{
@@ -3273,14 +3385,848 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 			}
 		}
 		return $mxurl;
-	}	
+	}
+
+
+	// =============================================
+	// Admin and mod functions
+	// =============================================
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $file_id
+	 * @param unknown_type $rating
+	 */
+	function update_voter_info( $file_id, $rating )
+	{
+		global $db, $userdata, $lang, $pafiledb_config;
+
+		$ipaddy = getenv ( "REMOTE_ADDR" );
+
+		if ($pafiledb_config['votes_check_ip'] && $pafiledb_config['votes_check_userid'])
+		{
+			$where_sql = ( $userdata['user_id'] != ANONYMOUS ) ? "(user_id = '" . $userdata['user_id'] . "' OR votes_ip = '" . $ipaddy . "')": "votes_ip = '" . $ipaddy . "'";
+		}
+		else if($pafiledb_config['votes_check_ip'])
+		{
+			$where_sql = ( $pafiledb_config['votes_check_ip'] ) ? "votes_ip = '" . $ipaddy . "'" : '';
+		}
+		else if($pafiledb_config['votes_check_userid'])
+		{
+			$where_sql = ( $userdata['user_id'] != ANONYMOUS ) ? "user_id = '" . $userdata['user_id'] . "'" : '';
+		}
+		else
+		{
+			$where_sql = "user_id = '-99'";
+		}
+		$where_sql .= !empty($where_sql) ? " AND votes_file = '" . $file_id . "'" : "votes_file = '" . $file_id . "'";
+
+		$sql = "SELECT user_id, votes_ip
+			FROM " . $this->pa_votes_table . "
+			WHERE $where_sql
+			LIMIT 1";
+
+		if ( !( $result = $this->db->sql_query( $sql ) ) )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Couldnt Query User id', '', __LINE__, __FILE__, $sql );
+		}
+
+		//
+		// Has already voted. Should we care?
+		//
+		if ( !$this->db->sql_numrows( $result ) )
+		{
+			$user_info = new mx_user_info();
+
+			$sql = "INSERT INTO " . $this->pa_votes_table . " (user_id, votes_ip, votes_file, rate_point, voter_os, voter_browser, browser_version)
+						VALUES('" . $user->data['user_id'] . "', '" . $ipaddy . "', '" . $file_id . "','" . $rating . "', '" . $user_info->platform . "', '" . $user_info->agent . "', '" . $user_info->ver . "')";
+
+			if ( !( $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt Update Votes Table Info', '', __LINE__, __FILE__, $sql );
+			}
+		}
+		else
+		{
+			$message = $lang['Rerror'] . "<br /><br />" . sprintf( $lang['Click_return'], "<a href=\"" . mx_append_sid( $this->this_mxurl( "action=link&amp;link_id=$file_id" ) ) . "\">", "</a>" );
+			$this->functions->message_die( GENERAL_MESSAGE, $message );
+		}
+
+		$this->db->sql_freeresult( $result );
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $file_data
+	 * @param unknown_type $item_id
+	 * @param unknown_type $cid
+	 * @param unknown_type $subject
+	 * @param unknown_type $message
+	 * @param unknown_type $html_on
+	 * @param unknown_type $bbcode_on
+	 * @param unknown_type $smilies_on
+	 */
+	function update_add_comment($file_data = '', $item_id, $cid, $subject = '', $message = '', $html_on = false, $bbcode_on = true, $smilies_on = false, $wysiwyg_on = false)
+	{
+		global $template, $pafiledb_functions, $lang, $board_config, $phpEx, $pafiledb_config, $db, $images, $userdata;
+		global $html_entities_match, $html_entities_replace, $unhtml_specialchars_match, $unhtml_specialchars_replace;
+		global $mx_root_path, $module_root_path, $phpbb_root_path, $is_block, $phpEx, $mx_request_vars;
+
+		//
+		// Ensure we have article_data defined
+		//
+		if (!is_array($file_data) && !empty($item_id) && $item_id > 0)
+		{
+			$sql = "SELECT *
+				FROM " . $this->pa_files_table . "
+				WHERE file_id = '" . $item_id . "'";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt select download', '', __LINE__, __FILE__, $sql );
+			}
+
+			if ( !$file_data = $this->db->sql_fetchrow( $result ) )
+			{
+				$this->functions->message_die( GENERAL_MESSAGE, $lang['File_not_exsist'] );
+			}
+
+			$this->db->sql_freeresult( $result );
+		}
+
+		//
+		// vars (can both be POSTed or send through the function)
+		//
+		$update_comment = $cid > 0 ? true : false;
+		$subject = !empty($subject) ? $subject : $_POST['subject'];
+		$message = !empty($message) ? $message : $_POST['message'];
+
+		$length = strlen( $message );
+
+		//
+		// Instantiate the mx_text class
+		//
+		$mx_text = new mx_text();
+		$mx_text->init($html_on, $bbcode_on, $smilies_on);
+		$mx_text->allow_all_html_tags = $wysiwyg_on;
+
+		//
+		// Encode for db storage
+		//
+		$title = $mx_text->encode_simple($subject);
+		$comments_text = $mx_text->encode($message);
+		$comment_bbcode_uid = $mx_text->bbcode_uid;
+
+		if ( $length > $pafiledb_config['max_comment_chars'] )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Your comment is too long!<br/>The maximum length allowed in characters is ' . $pafiledb_config['max_comment_chars'] . '' );
+		}
+
+		if ( $update_comment )
+		{
+			if ( $this->comments[$file_data['file_catid']]['internal_comments'] )
+			{
+				$sql = "UPDATE " . $this->pa_comments_table . "
+					SET comments_text = '" . str_replace( "\'", "''", $comments_text ) . "',
+				          comments_title = '" . str_replace( "\'", "''", $title ) . "',
+				          comment_bbcode_uid = '" . $comment_bbcode_uid . "'
+				    WHERE comments_id = " . $cid . "
+						AND file_id = ". $item_id;
+
+				if (!($this->db->sql_query($sql)))
+				{
+					$this->functions->message_die( GENERAL_ERROR, 'Couldnt update comments', '', __LINE__, __FILE__, $sql );
+				}
+			}
+			else
+			{
+				include( $module_root_path . 'pafiledb/includes/functions_comment.' . $phpEx );
+				$pafiledb_comments = new pafiledb_comments();
+				$pafiledb_comments->init( $item_id );
+
+				$return_data = $pafiledb_comments->post( 'update', $cid, $title, $comments_text, $userdata['user_id'], $userdata['username'], 0, '', '', $comment_bbcode_uid);
+			}
+
+		}
+		else
+		{
+			if ( $this->comments[$file_data['file_catid']]['internal_comments'] )
+			{
+				$time = time();
+				$poster_id = intval( $userdata['user_id'] );
+				$sql = "INSERT INTO " . $this->pa_comments_table . "(file_id, comments_text, comments_title, comments_time, comment_bbcode_uid, poster_id)
+					VALUES('$item_id','" . str_replace( "\'", "''", $comments_text ) . "','" . str_replace( "\'", "''", $title ) . "','$time', '$comment_bbcode_uid','$poster_id')";
+
+				if ( !( $this->db->sql_query( $sql ) ) )
+				{
+					$this->functions->message_die( GENERAL_ERROR, 'Couldnt insert comments', '', __LINE__, __FILE__, $sql );
+				}
+			}
+			else
+			{
+				include( $module_root_path . 'pafiledb/includes/functions_comment.' . $phpEx );
+				$pafiledb_comments = new pafiledb_comments();
+				$pafiledb_comments->init( $item_id );
+
+				$return_data = $pafiledb_comments->post( 'insert', '', $title, $comments_text, $userdata['user_id'], $userdata['username'], 0, '', '', $comment_bbcode_uid);
+			}
+		}
+
+		if ( !$this->comments[$file_data['file_catid']]['internal_comments'] )
+		{
+
+			//
+			// Update the item data itself
+			//
+			if ($file_data['topic_id'] == 0 )
+			{
+				//
+				// Update item with new topic_id
+				//
+				$sql = "UPDATE " . $this->pa_files_table . "
+					SET topic_id = '" . $return_data['topic_id'] . "'
+				    WHERE file_id = ". $item_id;
+
+				if ( !( $result = $this->db->sql_query( $sql ) ) )
+				{
+					$this->functions->message_die( GENERAL_ERROR, 'Couldnt update item', '', __LINE__, __FILE__, $sql );
+				}
+
+				$this->db->sql_freeresult( $result );
+			}
+		}
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $file_id
+	 * @return unknown
+	 */
+	function update_add_item( $file_id = false )
+	{
+		global $db, $phpbb_root_path, $userdata, $pafiledb_config, $_FILES, $pafiledb_functions, $user_ip, $auth, $module_root_path;
+
+		$ss_upload = ( empty( $_POST['screen_shot_url'] ) ) ? true : false;
+		$ss_remote_url = ( !empty( $_POST['screen_shot_url'] ) ) ? $_POST['screen_shot_url'] : '';
+		$ss_local = ( $_FILES['screen_shot']['tmp_name'] !== 'none' ) ? $_FILES['screen_shot']['tmp_name'] : '';
+		$ss_name = ( $_FILES['screen_shot']['name'] !== 'none' ) ? $_FILES['screen_shot']['name'] : '';
+		$ss_size = ( !empty( $_FILES['screen_shot']['size'] ) ) ? $_FILES['screen_shot']['size'] : '';
+
+		$file_upload = ( empty( $_POST['download_url'] ) ) ? true : false;
+		$file_remote_url = ( !empty( $_POST['download_url'] ) ) ? $_POST['download_url'] : '';
+		$file_local = ( $_FILES['userfile']['tmp_name'] !== 'none' ) ? $_FILES['userfile']['tmp_name'] : '';
+		$file_realname = ( $_FILES['userfile']['name'] !== 'none' ) ? $_FILES['userfile']['name'] : '';
+		$file_size = ( !empty( $_FILES['userfile']['size'] ) ) ? $_FILES['userfile']['size'] : '';
+		$file_type = ( !empty( $_FILES['userfile']['type'] ) ) ? $_FILES['userfile']['type'] : '';
+
+		$cat_id = ( isset( $_REQUEST['cat_id'] ) ) ? intval( $_REQUEST['cat_id'] ) : 0;
+		$file_name = ( isset( $_POST['name'] ) ) ? addslashes( htmlspecialchars( $_POST['name'] ) ) : '';
+		$file_long_desc = ( isset( $_POST['long_desc'] ) ) ? addslashes( htmlspecialchars( $_POST['long_desc'] ) ) : '';
+		$file_short_desc = ( isset( $_POST['short_desc'] ) ) ? addslashes( htmlspecialchars( $_POST['short_desc'] ) ) : ( ( !empty( $_POST['long_desc'] ) ) ? substr( addslashes( htmlspecialchars( $_POST['long_desc'] ) ), 0, 100 ) . '...' : '' );
+		$file_author = ( isset( $_POST['author'] ) ) ? addslashes( htmlspecialchars( $_POST['author']  ) ) : ( ( $userdata['user_id'] != ANONYMOUS ) ? $userdata['username'] : '' );
+		$file_version = ( isset( $_POST['version'] ) ) ? addslashes( htmlspecialchars( $_POST['version'] ) ) : '';
+		$file_website = ( isset( $_POST['website'] ) ) ? addslashes( htmlspecialchars( $_POST['website'] ) ) : '';
+
+		if ( !empty( $file_website ) )
+		{
+			$file_website = ( !preg_match( '#^http[s]?:\/\/#i', $file_website ) ) ? 'http://' . $file_website : $file_website;
+			$file_website = ( preg_match( '#^http[s]?\\:\\/\\/[a-z0-9\-]+\.([a-z0-9\-]+\.)?[a-z]+#i', $file_website ) ) ? $file_website : '';
+		}
+
+		$file_posticon = ( isset( $_POST['posticon'] ) ) ? htmlspecialchars( $_POST['posticon'] ) : '';
+		$file_license = ( isset( $_POST['license'] ) ) ? intval( $_POST['license'] ) : 0;
+		$file_pin = ( isset( $_POST['pin'] ) ) ? intval( $_POST['pin'] ) : 0;
+		$file_disable = ( isset( $_POST['file_disable'] ) ) ? intval( $_POST['file_disable'] ) : 0;
+		$disable_msg = ( isset( $_POST['disable_msg'] ) ) ? addslashes( htmlspecialchars( $_POST['disable_msg'] ) ) : '';
+		$file_ss_link = ( isset( $_POST['sshot_link'] ) ) ? intval( $_POST['sshot_link'] ) : 0;
+		$file_dls = ( isset( $_POST['file_download'] ) ) ? intval( $_POST['file_download'] ) : 0;
+		$file_time = time();
+
+		if ( $cat_id == -1 )
+		{
+			$this->error[] = $lang['Missing_field'];
+		}
+
+		if ( empty( $file_name ) )
+		{
+			$this->error[] = $lang['Missing_field'];
+		}
+
+		if ( empty( $file_long_desc ) )
+		{
+			$this->error[] = $lang['Missing_field'];
+		}
+
+		if ( empty( $file_remote_url ) && empty( $file_local ) && !$file_id )
+		{
+			$this->error[] = $lang['Missing_field'];
+		}
+
+		$forbidden_extensions = array_map( 'trim', @explode( ',', $pafiledb_config['forbidden_extensions'] ) );
+		$file_extension = $pafiledb_functions->get_extension( $file_realname );
+
+		if ( in_array( $file_extension, $forbidden_extensions ) )
+		{
+			$this->error[] = 'You are not allowed to upload this type of files';
+		}
+
+		$allowed_ss_extensions = array('jpg', 'gif', 'png');
+
+		if ( !empty( $ss_name ) )
+		{
+			$ss_file_extension = $pafiledb_functions->get_extension( $ss_name );
+
+			if ( !in_array( $ss_file_extension, $allowed_ss_extensions ) )
+			{
+				$this->error[] = 'You are not allowed to upload this type of screenshot image';
+			}
+		}
+
+		if ( sizeof( $this->error ) )
+		{
+			return;
+		}
+
+		$physical_file_name = '';
+
+		if ( $file_id )
+		{
+			$sql = 'SELECT file_dlurl, file_size, unique_name, file_dir, real_name, file_approved
+				FROM ' . $this->pa_files_table . "
+				WHERE file_id = '$file_id'";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt query Download URL', '', __LINE__, __FILE__, $sql );
+			}
+
+			$file_data = $this->db->sql_fetchrow( $result );
+
+			$this->db->sql_freeresult( $result );
+
+			if ( !empty( $file_remote_url ) || !empty( $file_local ) )
+			{
+				if ( !empty( $file_data['unique_name'] ) )
+				{
+					$pafiledb_functions->pafiledb_unlink( $module_root_path . $file_data['file_dir'] . $file_data['unique_name'] );
+				}
+			}
+			else
+			{
+				$file_remote_url = $file_data['file_dlurl'];
+				$physical_file_name = $file_data['unique_name'];
+				$file_realname = $file_data['real_name'];
+
+				if ( empty( $file_local ) )
+				{
+					$file_upload = false;
+				}
+			}
+		}
+		
+		if ( !$file_size )
+		{
+			$file_size = $lang['Not_available'];
+		}		
+
+		if ( $file_upload )
+		{
+			$physical_file_name = $pafiledb_functions->gen_unique_name( '.' . $file_extension );
+
+			$file_info = $pafiledb_functions->upload_file( $file_local, $physical_file_name, $file_size, $pafiledb_config['upload_dir'] );
+
+			if ( $file_info['error'] )
+			{
+				$this->functions->message_die( GENERAL_ERROR, $file_info['message'] );
+			}
+		}
+
+		if ( !empty( $ss_remote_url ) || !empty( $ss_local ) )
+		{
+			if ( $ss_upload )
+			{
+				$screen_shot_info = $pafiledb_functions->upload_file( $ss_local, $ss_name, $ss_size, $pafiledb_config['screenshots_dir'] );
+
+				if ( $screen_shot_info['error'] )
+				{
+					$this->functions->message_die( GENERAL_ERROR, $screen_shot_info['message'] );
+				}
+				$screen_shot_url = $screen_shot_info['url'];
+			}
+			else
+			{
+				$screen_shot_url = $ss_remote_url;
+			}
+		}
+
+		if ( !$file_id )
+		{
+			if ($this->auth_user[$cat_id]['auth_approval'] || $this->auth_user[$cat_id]['auth_mod'])
+			{
+				$file_approved = 1;
+			}
+			else
+			{
+				$file_approved = 0;
+			}
+		}
+		else
+		{
+			if ($this->auth_user[$cat_id]['auth_approval_edit'] || $this->auth_user[$cat_id]['auth_mod'])
+			{
+				$file_approved = 1;
+			}
+			else
+			{
+				$file_approved = 0;
+			}
+		}
+
+		/*
+		if ( $pafiledb->modules[$pafiledb->module_name]->auth_user[$cat_id]['auth_approval'] || ( $pafiledb->modules[$pafiledb->module_name]->auth_user[$cat_id]['auth_mod'] && $userdata['session_logged_in'] ) )
+		{
+			if ( !$file_id )
+			{
+				$file_approved = 1;
+			}
+			else
+			{
+				$file_approved = isset( $file_data['file_approved'] ) &&  !( $pafiledb->modules[$pafiledb->module_name]->auth_user[$cat_id]['auth_mod'] && $userdata['session_logged_in'] ) ? $file_data['file_approved'] : 1;
+			}
+		}
+		else
+		{
+			$file_approved = 0;
+		}
+		*/
+
+
+		if ( !$file_id )
+		{
+			$sql = 'INSERT INTO ' . $this->pa_files_table . " (user_id, poster_ip, file_name, file_size, unique_name, real_name, file_dir, file_desc, file_creator, file_version, file_longdesc, file_ssurl, file_sshot_link, file_dlurl, file_time, file_update_time, file_catid, file_posticon, file_license, file_dls, file_last, file_pin, file_disable, disable_msg, file_docsurl, file_approved)
+					VALUES('{$userdata['user_id']}', '$user_ip', '" . str_replace( "\'", "''", $file_name ) . "', '$file_size', '$physical_file_name', '$file_realname', '{$pafiledb_config['upload_dir']}', '" . str_replace( "\'", "''", $file_short_desc ) . "', '" . str_replace( "\'", "''", $file_author ) . "', '" . str_replace( "\'", "''", $file_version ) . "', '" . str_replace( "\'", "''", $file_long_desc ) . "', '$screen_shot_url', '$file_ss_link', '$file_remote_url', '$file_time', '$file_time', '$cat_id', '$file_posticon', '$file_license', '$file_dls', '0', '$file_pin', '$file_disable', '$disable_msg', '$file_website', '$file_approved')";
+		}
+		else
+		{
+			$sql = 'SELECT *
+				FROM ' . $this->pa_files_table . "
+				WHERE file_id = '$file_id'";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt query Download URL', '', __LINE__, __FILE__, $sql );
+			}
+
+			$update_data = $this->db->sql_fetchrow( $result );
+
+			$this->db->sql_freeresult( $result );	
+			
+			$sql = array(			
+				'file_name' => str_replace( "\'", "''", $file_name ),
+				'file_desc' => str_replace( "\'", "''", $file_short_desc ),
+				'file_longdesc' => str_replace( "\'", "''", $file_long_desc ),
+				'file_catid' => (int) $cat_id,
+				'file_approved' => (int) $file_approved,
+
+				'file_size' => (int) $file_size,
+				'unique_name' => $physical_file_name,
+				'real_name' => $file_realname,
+				'file_dir' => $pafiledb_config['upload_dir'],
+				'file_creator' => str_replace( "\'", "''", $file_author ),
+				'file_version' => str_replace( "\'", "''", $file_version ),
+				'file_ssurl' => $screen_shot_url,
+				'file_sshot_link' => (int) $update_data['file_sshot_link'],
+				'file_dlurl' => $file_remote_url,
+				'file_posticon' => $file_posticon,
+				'file_license' => (int) $file_license,
+				'file_docsurl' => $file_website,
+
+				'file_time' => (int) $update_data['file_time'],
+				'user_id' => (int) $update_data['user_id'],
+				'poster_ip' => $update_data['poster_ip'],
+				'file_update_time' => (int) $file_time,
+				'file_last' => (int) $update_data['file_last'],
+				'file_pin' => (int) $file_pin,
+				'file_disable' => (int) $file_disable,
+				'disable_msg' => $disable_msg,
+				'file_broken' => (int) $update_data['file_broken'],
+				'topic_id' => (int) $update_data['topic_id'],
+				'file_dls' => (int) $file_dls,			
+			);
+
+			$sql = "UPDATE " . $this->pa_files_table . " SET " . $this->db->sql_build_array('UPDATE', $sql) . "
+				WHERE file_id = '" . $this->db->sql_escape($file_id) . "'";			
+		}
+	
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Couldnt Add the file information to the database', '', __LINE__, __FILE__, $sql );
+		}
+		$this->modified( true );
+
+		if ( $file_id )
+		{
+			return $file_id;
+		}
+		else
+		{
+			return $this->db->sql_nextid();
+		}
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $file_id
+	 * @param unknown_type $cat_id
+	 * @param unknown_type $mode_notification
+	 */
+	function update_add_item_notify($file_id = false, $mode_notification = 'edit')
+	{
+		if ( in_array( $mode_notification, array( 'add', 'edit', 'do_approve', 'do_unapprove', 'delete' ) ) )
+		{
+			if (!$file_id)
+			{
+				die('bad update_add_item_notify arg');
+			}
+
+			if (is_array( $file_id ) && !empty( $file_id ))
+			{
+				$fileIdsArray = $file_id;
+			}
+			else
+			{
+				$fileIdsArray[] = $file_id;
+			}
+
+			foreach($fileIdsArray as $fileId)
+			{
+				$sql = "SELECT file_catid
+					FROM " . $this->pa_files_table . "
+					WHERE file_id = '" . $fileId . "'";
+
+				if ( !$result = $this->db->sql_query( $sql ) )
+				{
+					$this->functions->message_die( GENERAL_ERROR, 'Couldn\'t get file info', '', __LINE__, __FILE__, $sql );
+				}
+
+				$row = $this->db->sql_fetchrow( $result );
+				$catId = $row['file_catid'];
+
+				//
+				// Notification
+				//
+				if ( $this->notification[$catId]['activated'] > 0 ) // -1, 0, 1, 2
+				{
+					//
+					// Instatiate notification
+					//
+					$mx_pa_notification = new mx_pa_notification();
+					$mx_pa_notification->init( $fileId );
+
+					//
+					// Now send notification
+					//
+					$mx_notification_mode = $this->notification[$catId]['activated'] == 1 ? MX_PM_MODE : MX_MAIL_MODE;
+
+					switch ( $mode_notification )
+					{
+						case 'add':
+							$mx_notification_action = MX_NEW_NOTIFICATION;
+						break;
+						case 'edit':
+							$mx_notification_action = MX_EDITED_NOTIFICATION;
+						break;
+						case 'do_approve':
+							$mx_notification_action = MX_APPROVED_NOTIFICATION;
+						break;
+						case 'do_unapprove':
+							$mx_notification_action = MX_UNAPPROVED_NOTIFICATION;
+						break;
+						case 'delete':
+							$mx_notification_action = MX_DELETED_NOTIFICATION;
+						break;
+					}
+
+					$html_entities_match = array('#&(?!(\#[0-9]+;))#', '#<#', '#>#', '#"#');
+					$html_entities_replace = array('&amp;', '&lt;', '&gt;', '&quot;');
+
+					$mx_pa_notification->notify($mx_notification_mode, $mx_notification_action);
+
+					if ( $this->notification[$catId]['notify_group'] > 0 )
+					{
+						$mx_pa_notification->notify( $mx_notification_mode, $mx_notification_action, - intval($this->notification[$catId]['notify_group']) );
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $id
+	 * @param unknown_type $mode
+	 */
+	function delete_items( $id, $mode = 'file' )
+	{
+		global $db, $phpbb_root_path, $pafiledb_functions;
+
+		if ( $mode == 'category' )
+		{
+			$file_ids = array();
+			$files_data = array();
+
+			$sql = 'SELECT file_id, unique_name, file_dir
+				FROM ' . $this->pa_files_table . "
+				WHERE file_catid = $id";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt select files', '', __LINE__, __FILE__, $sql );
+			}
+
+			while ( $row = $this->db->sql_fetchrow( $result ) )
+			{
+				$file_ids[] = $row['file_id'];
+				$files_data[] = $row;
+			}
+
+			$where_sql = "WHERE file_catid = $id";
+		}
+		else
+		{
+			$sql = 'SELECT file_id, unique_name, file_dir
+				FROM ' . $this->pa_files_table . "
+				WHERE file_id = $id";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				$this->functions->message_die( GENERAL_ERROR, 'Couldnt select files', '', __LINE__, __FILE__, $sql );
+			}
+
+			$file_data = $this->db->sql_fetchrow( $result );
+
+			$where_sql = "WHERE file_id = $id";
+		}
+
+		$sql = 'DELETE FROM ' . $this->pa_files_table . "
+			$where_sql";
+
+		unset( $where_sql );
+
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Couldnt delete files', '', __LINE__, __FILE__, $sql );
+		}
+
+		$where_sql = ( $mode != 'file' && !empty( $file_ids ) ) ? ' IN (' . implode( ', ', $file_ids ) . ') ' : " = $id";
+
+		$sql = 'DELETE FROM ' . $this->custom_data_table . "
+			WHERE customdata_file$where_sql";
+
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Couldnt delete custom data', '', __LINE__, __FILE__, $sql );
+		}
+
+		$sql = 'DELETE FROM ' . $this->pa_mirrors_table . "
+			WHERE file_id$where_sql";
+
+		if ( !( $this->db->sql_query($sql) ) )
+		{
+			$this->functions->message_die( GENERAL_ERROR, 'Couldnt delete mirror for this file', '', __LINE__, __FILE__, $sql );
+		}
+
+		if ( $mode == 'category' )
+		{
+			foreach( $files_data as $file_data )
+			{
+				if ( !empty( $file_data['unique_name'] ) )
+				{
+					$pafiledb_functions->pafiledb_unlink( $phpbb_root_path . $file_data['file_dir'] . $file_data['unique_name'] );
+				}
+			}
+		}
+		else
+		{
+			if ( !empty( $file_data['unique_name'] ) )
+			{
+				$pafiledb_functions->pafiledb_unlink( $phpbb_root_path . $file_data['file_dir'] . $file_data['unique_name'] );
+			}
+		}
+
+		if ( $mode == 'file' )
+		{
+			$this->modified( true );
+		}
+
+		return;
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $file_id
+	 * @param unknown_type $file_upload
+	 * @param unknown_type $file_remote_url
+	 * @param unknown_type $file_local
+	 * @param unknown_type $file_realname
+	 * @param unknown_type $file_size
+	 * @param unknown_type $file_type
+	 * @param unknown_type $mirror_location
+	 * @param unknown_type $mirror_id
+	 */
+	function mirror_add_update( $file_id, $file_upload, $file_remote_url, $file_local, $file_realname, $file_size, $file_type, $mirror_location, $mirror_id = false )
+	{
+		global $db, $phpbb_root_path, $db, $_POST, $userdata, $pafiledb_config, $_FILES, $_REQUEST, $pafiledb_functions;
+		// MX
+		global $mx_root_path, $module_root_path, $is_block, $phpEx;
+
+		if ( empty( $file_remote_url ) && empty( $file_local ) && !$file_id )
+		{
+			$this->error[] = $lang['Missing_field'];
+		}
+
+		$forbidden_extensions = array_map( 'trim', @explode( ',', $pafiledb_config['forbidden_extensions'] ) );
+
+		$file_extension = $pafiledb_functions->get_extension( $file_realname );
+
+		if ( in_array( $file_extension, $forbidden_extensions ) )
+		{
+			$this->error[] = 'You are not allowed to upload this type of files';
+		}
+
+		if ( sizeof( $this->error ) )
+		{
+			return;
+		}
+
+		$physical_file_name = '';
+
+		if ( $mirror_id )
+		{
+			$sql = 'SELECT file_dlurl, unique_name, file_dir
+				FROM ' . PA_MIRRORS_TABLE . "
+				WHERE mirror_id = $mirror_id";
+
+			if ( !( $result = $this->db->sql_query( $sql ) ) )
+			{
+				mx_message_die( GENERAL_ERROR, 'Couldnt query Download URL', '', __LINE__, __FILE__, $sql );
+			}
+
+			$mirror_data = $this->db->sql_fetchrow( $result );
+
+			$this->db->sql_freeresult( $result );
+
+			if ( !empty( $file_remote_url ) || !empty( $file_local ) )
+			{
+				if ( !empty( $mirror_data['unique_name'] ) )
+				{
+					$pafiledb_functions->pafiledb_unlink( $module_root_path . $mirror_data['file_dir'] . $mirror_data['unique_name'] );
+				}
+			}
+			else
+			{
+				$file_remote_url = $mirror_data['file_dlurl'];
+				$physical_file_name = $mirror_data['unique_name'];
+				$file_dir = $mirror_data['file_dir'];
+
+				if ( empty( $file_local ) )
+				{
+					$file_upload = false;
+				}
+			}
+		}
+
+		if ( $file_upload )
+		{
+			$physical_file_name = $pafiledb_functions->gen_unique_name( '.' . $file_extension );
+
+			$file_info = $pafiledb_functions->upload_file( $file_local, $physical_file_name, $file_size, $module_root_path . $pafiledb_config['upload_dir'] );
+
+			if ( $file_info['error'] )
+			{
+				mx_message_die( GENERAL_ERROR, $file_info['message'] );
+			}
+		}
+
+		if ( !$mirror_id )
+		{
+			$sql = 'INSERT INTO ' . PA_MIRRORS_TABLE . " (file_id, unique_name, file_dir, file_dlurl, mirror_location)
+					VALUES($file_id, '$physical_file_name', '{$pafiledb_config['upload_dir']}', '$file_remote_url', '" . str_replace( "\'", "''", $mirror_location ) . "')";
+		}
+		else
+		{
+			$sql = "UPDATE " . PA_MIRRORS_TABLE . "
+				SET file_id = $file_id,
+				unique_name = '$physical_file_name',
+				file_dir = '{$pafiledb_config['upload_dir']}',
+				file_dlurl = '$file_remote_url',
+				mirror_location = '" . str_replace( "\'", "''", $mirror_location ) . "'
+				WHERE mirror_id = '$mirror_id'";
+		}
+
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			mx_message_die( GENERAL_ERROR, 'Couldnt Add the file information to the database', '', __LINE__, __FILE__, $sql );
+		}
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $mirror_id
+	 */
+	function delete_mirror( $mirror_id )
+	{
+		global $db;
+
+		$where_sql = ( is_array( $mirror_id ) ) ? 'IN (' . implode( ', ', $mirror_id ) . ')' : "= $mirror_id";
+
+		$sql = 'DELETE FROM ' . PA_MIRRORS_TABLE . "
+			WHERE mirror_id $where_sql";
+
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			mx_message_die( GENERAL_ERROR, 'Couldnt delete mirror for this file', '', __LINE__, __FILE__, $sql );
+		}
+	}
+
+	/**
+	 * Enter description here...
+	 *
+	 * @param unknown_type $mode
+	 * @param unknown_type $file_id
+	 */
+	function approve_item( $mode = 'do_approve', $file_id )
+	{
+		global $db;
+
+		$file_approved = ( $mode == 'do_approve' ) ? 1 : 0;
+
+		$sql = 'UPDATE ' . PA_FILES_TABLE . "
+			SET file_approved = $file_approved
+			WHERE file_id = $file_id";
+
+		if ( !( $this->db->sql_query( $sql ) ) )
+		{
+			mx_message_die( GENERAL_ERROR, 'Couldnt Add the file information to the database', '', __LINE__, __FILE__, $sql );
+		}
+
+		$this->modified( true );
+	}
+	
 
 	/**
 	 * Enter description here...
 	 *
 	 * @return unknown
 	 */
-	function get_formated_url()
+	function get_formated_url($script_name = true)
 	{
 		$server_protocol = ( $this->config['cookie_secure'] ) ? 'https://' : 'http://';
 		$server_name = preg_replace( '#^\/?(.*?)\/?$#', '\1', trim( $this->config['server_name'] ) );
@@ -3288,10 +4234,11 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 
 		$formated_url = $server_protocol . $server_name . $server_port;
 		
-		$formated_url = function_exists('generate_board_url') ? generate_board_url() . '/' : $formated_url;
+		$formated_url = (function_exists('generate_board_url') && ($script_name == true)) ? generate_board_url() . '/' : $formated_url;
 		
 		return $formated_url;
 	}	
+	
 	/**
 	* Post download announcement
 	*/
@@ -3500,20 +4447,20 @@ class pafiledb extends \orynider\pafiledb\core\pafiledb_auth
 	 */
 	function auth_can($cat_id)
 	{
-		global $lang;
+		//global $lang;
 		
-		$this->auth_can_list = '<br />' . ( ( $this->auth_user[$cat_id]['auth_upload'] ) ? $lang['PA_Rules_upload_can'] : $lang['PA_Rules_upload_cannot'] ) . '<br />';
-		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_view_file'] ) ? $lang['PA_Rules_view_file_can'] : $lang['PA_Rules_view_file_cannot'] ) . '<br />';
-		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_edit_file'] ) ? $lang['PA_Rules_edit_file_can'] : $lang['PA_Rules_edit_file_cannot'] ) . '<br />';
-		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_delete_file'] ) ? $lang['PA_Rules_delete_file_can'] : $lang['PA_Rules_delete_file_cannot'] ) . '<br />';
-		$this->auth_can_list .= ( ( $this->comments[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_view_comment'] ? $lang['PA_Rules_view_comment_can'] : $lang['PA_Rules_view_comment_cannot'] ) . '<br />') : ''));
-		$this->auth_can_list .= ( ( $this->comments[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_post_comment'] ? $lang['PA_Rules_post_comment_can'] : $lang['PA_Rules_post_comment_cannot'] ) . '<br />') : ''));
-		$this->auth_can_list .= ( ( $this->ratings[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_rate'] ? $lang['PA_Rules_rate_can'] : $lang['PA_Rules_rate_cannot'] ) . '<br />') : ''));
-		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_download'] ) ? $lang['PA_Rules_download_can'] : $lang['PA_Rules_download_cannot'] ) . '<br />';
+		$this->auth_can_list = '<br />' . ( ( $this->auth_user[$cat_id]['auth_upload'] ) ? $this->user->lang['PA_Rules_upload_can'] : $this->user->lang['PA_Rules_upload_cannot'] ) . '<br />';
+		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_view_file'] ) ? $this->user->lang['PA_Rules_view_file_can'] : $this->user->lang['PA_Rules_view_file_cannot'] ) . '<br />';
+		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_edit_file'] ) ? $this->user->lang['PA_Rules_edit_file_can'] : $this->user->lang['PA_Rules_edit_file_cannot'] ) . '<br />';
+		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_delete_file'] ) ? $this->user->lang['PA_Rules_delete_file_can'] : $this->user->lang['PA_Rules_delete_file_cannot'] ) . '<br />';
+		$this->auth_can_list .= ( ( $this->comments[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_view_comment'] ? $this->user->lang['PA_Rules_view_comment_can'] : $this->user->lang['PA_Rules_view_comment_cannot'] ) . '<br />') : ''));
+		$this->auth_can_list .= ( ( $this->comments[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_post_comment'] ? $this->user->lang['PA_Rules_post_comment_can'] : $this->user->lang['PA_Rules_post_comment_cannot'] ) . '<br />') : ''));
+		$this->auth_can_list .= ( ( $this->ratings[$cat_id]['activated'] ? ( ( $this->auth_user[$cat_id]['auth_rate'] ? $this->user->lang['PA_Rules_rate_can'] : $this->user->lang['PA_Rules_rate_cannot'] ) . '<br />') : ''));
+		$this->auth_can_list .= ( ( $this->auth_user[$cat_id]['auth_download'] ) ? $this->user->lang['PA_Rules_download_can'] : $this->user->lang['PA_Rules_download_cannot'] ) . '<br />';
 
 		if ( $this->auth_user[$cat_id]['auth_mod'] )
 		{
-			$this->auth_can_list .= $lang['PA_Rules_moderate_can'];
+			$this->auth_can_list .= $this->user->lang['PA_Rules_moderate_can'];
 		}
 	}	
 }

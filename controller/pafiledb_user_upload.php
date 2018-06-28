@@ -104,15 +104,17 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		\phpbb\request\request $request,
 		\phpbb\extension\manager $ext_manager,
 		\phpbb\path_helper $path_helper,
-		$php_ext, $root_path,
+		$php_ext, 
+		$root_path,
 		$pa_files_table,
 		$pa_cat_table,
+		$pa_auth_access_table,
 		$custom_table,
 		$custom_data_table,		
 		\phpbb\files\factory $files_factory = null)
 	{
 		$this->functions 			= $functions;
-		$this->custom_field 		= $custom_field;		
+		$this->custom_field 		= $custom_field;
 		$this->template 			= $template;
 		$this->user 				= $user;
 		$this->auth 				= $auth;
@@ -124,10 +126,13 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		$this->path_helper	 		= $path_helper;
 		$this->php_ext 				= $php_ext;
 		$this->root_path 			= $root_path;
+		
 		$this->pa_files_table 		= $pa_files_table;
 		$this->pa_cat_table 		= $pa_cat_table;
+		$this->pa_auth_access_table = $pa_auth_access_table;		
 		$this->custom_table 		= $custom_table;
 		$this->custom_data_table 	= $custom_data_table;		
+		
 		$this->files_factory 		= $files_factory;
 		
 		$this->ext_path 			= $this->ext_manager->get_extension_path('orynider/pafiledb', true);
@@ -141,6 +146,77 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		{
 			define('PHPBB_USE_BOARD_URL_PATH', true);
 		}
+		
+		$sql = 'SELECT *
+			FROM ' . $this->pa_cat_table . '
+			ORDER BY cat_order ASC';
+
+		if ( !( $result = $this->db->sql_query( $sql ) ) )
+		{
+			$this->message_die(GENERAL_ERROR, 'Couldnt Query categories info', '', __LINE__, __FILE__, $sql);
+		}
+		
+		$cat_rowset = $this->db->sql_fetchrowset($result);
+		$this->db->sql_freeresult($result);
+		
+		$this->auth($cat_rowset, '');
+
+		for( $i = 0; $i < $cats = count($cat_rowset); $i++ )
+		{
+			if ( $auth->acl_get('u_pa_files_download') || $this->auth_user[$cat_rowset[$i]['cat_id']]['auth_view'] )
+			{
+				$this->cat_rowset[$cat_rowset[$i]['cat_id']] = $cat_rowset[$i];
+				$this->subcat_rowset[$cat_rowset[$i]['cat_parent']][$cat_rowset[$i]['cat_id']] = $cat_rowset[$i];
+				$this->total_cat++;
+
+				//
+				// Comments
+				// Note: some settings are category dependent, but may use default config settings
+				//
+				$this->comments[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['cat_allow_comments'] == -1 ? ($pafiledb_config['use_comments'] == 1 ? true : false ) : ( $cat_rowset[$i]['cat_allow_comments'] == 1 ? true : false );
+
+				switch($this->backend)
+				{
+					case 'internal':
+						$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] = true; // phpBB or internal comments
+						$this->comments[$cat_rowset[$i]['cat_id']]['autogenerate_comments'] = false; // autocreate comments when updated
+						$this->comments[$cat_rowset[$i]['cat_id']]['comments_forum_id'] = 0; // phpBB target forum (only used for phpBB comments)
+					break;
+
+					default:
+						$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] = $cat_rowset[$i]['internal_comments'] == -1 ? ($pafiledb_config['internal_comments'] == 1 ? true : false ) : ( $cat_rowset[$i]['internal_comments'] == 1 ? true : false ); // phpBB or internal comments
+						$this->comments[$cat_rowset[$i]['cat_id']]['autogenerate_comments'] = $cat_rowset[$i]['autogenerate_comments'] == -1 ? ($pafiledb_config['autogenerate_comments'] == 1 ? true : false ) : ( $cat_rowset[$i]['autogenerate_comments'] == 1 ? true : false ); // autocreate comments when updated
+						$this->comments[$cat_rowset[$i]['cat_id']]['comments_forum_id'] = $cat_rowset[$i]['comments_forum_id'] < 1 ? ( intval($pafiledb_config['comments_forum_id']) ) : ( intval($cat_rowset[$i]['comments_forum_id']) ); // phpBB target forum (only used for phpBB comments)
+					break;
+				}
+
+				if ($this->comments[$cat_rowset[$i]['cat_id']]['activated'] && !$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] && intval($this->comments[$cat_rowset[$i]['cat_id']]['comments_forum_id']) < 1)
+				{
+					$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] = true; // autocreate comments when updated
+				}
+				
+				if ($this->comments[$cat_rowset[$i]['cat_id']]['activated'] && !$this->comments[$cat_rowset[$i]['cat_id']]['internal_comments'] && intval($this->comments[$cat_rowset[$i]['cat_id']]['comments_forum_id']) < 1)
+				{
+					$this->message_die(GENERAL_ERROR, 'Init Failure, phpBB comments with no target forum_id :( <br> Category: ' . $cat_rowset[$i]['cat_name'] . ' Forum_id: ' . $this->comments[$cat_rowset[$i]['cat_id']]['comments_forum_id']);
+				}
+				
+				//
+				// Ratings
+				//
+				$this->ratings[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['cat_allow_ratings'] == -1 ? ($pafiledb_config['use_ratings'] == 1 ? true : false ) : ( $cat_rowset[$i]['cat_allow_ratings'] == 1 ? true : false );
+
+				//
+				// Information
+				//
+				$this->information[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['show_pretext'] == -1 ? ($pafiledb_config['show_pretext'] == 1 ? true : false ) : ( $cat_rowset[$i]['show_pretext'] == 1 ? true : false ); // phpBB or internal ratings
+
+				//
+				// Notification
+				//
+				$this->notification[$cat_rowset[$i]['cat_id']]['activated'] = $cat_rowset[$i]['notify'] == -1 ? (intval($pafiledb_config['notify'])) : ( intval($cat_rowset[$i]['notify']) ); // -1, 0, 1, 2
+				$this->notification[$cat_rowset[$i]['cat_id']]['notify_group'] = $cat_rowset[$i]['notify_group'] == -1 || $cat_rowset[$i]['notify_group'] == 0 ? (intval($pafiledb_config['notify_group'])) : ( intval($cat_rowset[$i]['notify_group']) ); // Group_id
+			}
+		}	
 	}
 
 	public function handle_upload()
@@ -234,7 +310,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		{
 			$sql = 'SELECT *
 				FROM ' . $this->pa_files_table . "
-				WHERE file_id = '".$file_id."'";
+				WHERE file_id = '" . $file_id . "'";
 
 			if ( !( $result = $this->db->sql_query( $sql ) ) )
 			{
@@ -260,7 +336,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		{
 			$cat_id = 0;
 		}
-
+				
 		//
 		// Load custom fields
 		//
@@ -271,7 +347,58 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		$this->request,
 		$this->custom_table,
 		$this->custom_data_table);
-		$custom_field->init();		
+		$custom_field->init();
+		
+		// =======================================================
+		// Delete
+		// =======================================================
+		if ( $do == 'delete' && $file_id )
+		{
+			if ( ( $this->auth_user[$cat_id]['auth_edit_file'] && $file_data['user_id'] == $this->user->data['user_id'] ) || $this->auth_user[$cat_id]['auth_mod'] )
+			{
+				//
+				// Notification
+				//
+				$this->functions->update_add_item_notify($file_id, 'delete');
+
+				//
+				// Comments
+				//
+				if ($this->comments[$cat_id]['activated'] && $pafiledb_config['del_topic'])
+				{
+					if ( $this->comments[$cat_id]['internal_comments'] )
+					{
+						$sql = 'DELETE FROM ' . $this->pa_comments_table . "
+						WHERE file_id = '" . $file_id . "'";
+
+						if ( !( $this->db->sql_query( $sql ) ) )
+						{
+							$this->functions->message_die( GENERAL_ERROR, 'Couldnt delete comments', '', __LINE__, __FILE__, $sql );
+						}
+					}
+					else
+					{
+						if ( $file_data['topic_id'] )
+						{
+							include( $this->module_root_path . 'pafiledb/includes/functions_comment.' . $phpEx );
+							$mx_pa_comments = new pafiledb_comments();
+							$mx_pa_comments->init( $file_data, 'phpbb');
+							$mx_pa_comments->post('delete_all', $file_data['topic_id']);
+						}
+					}
+				}
+
+				$this->delete_items( $file_id );
+				$this->_pafiledb();
+				$message = $this->user->lang['Filedeleted'] . '<br /><br />' . sprintf( $this->user->lang['Click_return'], '<a href="' . $this->functions->append_sid( $this->this_mxurl( "action=category&cat_id=" . $cat_id ) ) . '">', '</a>' );
+				$this->functions->message_die( GENERAL_MESSAGE, $message );
+			}
+			else
+			{
+				$message = sprintf( $this->user->lang['Sorry_auth_delete'], $this->auth_user[$cat_id]['auth_delete_type'] );
+				$this->functions->message_die( GENERAL_MESSAGE, $message );
+			}
+		}		
 		
 		if ($this->request->is_set_post('submit'))
 		{
@@ -316,13 +443,13 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 
 				if (!$upload_file->get('uploadname'))
 				{
-					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_upload'));
+					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_user_upload'));
 					throw new http_exception(400, 'ACP_NO_FILENAME');
 				}
 
 				if (file_exists($this->root_path . $upload_dir . '/' . $upload_file->get('uploadname')))
 				{
-					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_upload'));
+					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_user_upload'));
 					throw new http_exception(400, 'ACP_UPLOAD_FILE_EXISTS');
 				}
 
@@ -332,7 +459,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 				if (sizeof($upload_file->error) && $upload_file->get('uploadname'))
 				{
 					$upload_file->remove();
-					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_upload'));
+					meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_user_upload'));
 
 					trigger_error(implode('<br />', $upload_file->error));
 				}
@@ -391,6 +518,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 				{
 					$file_name = $title . ' v' . $file_version;
 				}
+				
 				$download_link = '[url=' . generate_board_url() . '/category?cat_id=' . $cat_option . ']' . $this->user->lang['ACP_CLICK'] . '[/url]';
 				$download_subject = sprintf($this->user->lang['ACP_ANNOUNCE_TITLE'], $file_title);
 
@@ -477,7 +605,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 		// Build navigation link
 		$this->template->assign_block_vars('navlinks', array(
 			'FORUM_NAME'	=> $this->user->lang('FILES_UPLOAD_SECTION'),
-			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller_upload'),
+			'U_VIEW_FORUM'	=> $this->helper->route('orynider_pafiledb_controller_user_upload'),
 		));
 
 		/* assign template lang keys if they not assigned yet start * /
@@ -506,7 +634,7 @@ class pafiledb_user_upload extends \orynider\pafiledb\core\pafiledb_public
 	{
 		$this->log->add('admin', $this->user->data['user_id'], $this->user->ip, $log_message, time(), array($title));
 
-		meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_upload'));
+		meta_refresh(3, $this->helper->route('orynider_pafiledb_controller_user_upload'));
 
 		trigger_error($this->user->lang[$user_message]);
 	}

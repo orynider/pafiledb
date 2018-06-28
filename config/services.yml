@@ -22,7 +22,7 @@ services:
             - '@auth'
             - '@request'
             - '@controller.helper'
-    orynider.pafiledb.controller.upload:
+    orynider.pafiledb.controller.user_upload:
         class: orynider\pafiledb\controller\pafiledb_user_upload
         arguments:
             - '@orynider.pafiledb.core.pafiledb'
@@ -40,6 +40,7 @@ services:
             - '%core.root_path%'
             - '%orynider.pafiledb.table.pa_files%'
             - '%orynider.pafiledb.table.pa_cat%'
+            - '%orynider.pafiledb.table.pa_auth_access%'			
             - '%orynider.pafiledb.table.pa_custom%'
             - '%orynider.pafiledb.table.pa_customdata%'			
             - '@?files.factory'
@@ -103,6 +104,46 @@ services:
             - '%core.php_ext%'			
             - '%orynider.pafiledb.table.pa_files%'
             - '%orynider.pafiledb.table.pa_cat%'
+    orynider.pafiledb.controller.post_comment:			
+        class: orynider\pafiledb\controller\pafiledb_post_comment
+        arguments:
+            - '@template'
+            - '@user'
+            - '@dbal.conn'
+            - '@request'
+            - '@controller.helper'			
+            - '@auth'
+            - '@orynider.pafiledb.core.pafiledb'
+            - '@cache'
+            - '@orynider.pafiledb.core.pafiledb_cache'
+            - '@orynider.pafiledb.core.pafiledb_templates'		
+            - '@config'
+            - '@ext.manager'
+            - '%core.php_ext%'
+            - '%core.root_path%' 
+            - '%orynider.pafiledb.table.pa_files%'
+            - '%orynider.pafiledb.table.pa_comments%'		
+    orynider.pafiledb.controller.viewall:
+        class: orynider\pafiledb\controller\pafiledb_viewall
+        arguments:
+            - '@orynider.pafiledb.core.pafiledb'
+            - '@template'
+            - '@user'
+            - '@auth'			
+            - '@cache'
+            - '@orynider.pafiledb.core.pafiledb_cache'
+            - '@dbal.conn'
+            - '@request'
+            - '@controller.helper'			
+            - '@pagination'
+            - '@ext.manager'
+            - '@path_helper'
+            - '%core.php_ext%'
+            - '%core.root_path%'
+            - '%orynider.pafiledb.table.pa_files%'
+            - '%orynider.pafiledb.table.pa_cat%'
+            - '%orynider.pafiledb.table.pa_auth_access%'
+            - '%orynider.pafiledb.table.pa_config%'						
     orynider.pafiledb.controller.admin.controller:
         class: orynider\pafiledb\controller\admin_controller
         arguments:
@@ -124,14 +165,25 @@ services:
             - '%orynider.pafiledb.table.pa_auth_access%'
             - '%orynider.pafiledb.table.pa_config%'
             - '@?files.factory'
-    orynider.pafiledb.core.pafiledb_cache:
+    orynider.pafiledb.core.pafiledb_cache:	
         class: orynider\pafiledb\core\pafiledb_cache
         arguments:
-            - '%core.cache_dir%'
+            - '@cache'
+            - '@user'			
+            - '@dbal.conn'
+            - '@ext.manager'
+            - '@service_container'			
             - '%core.php_ext%'
             - '%core.root_path%'
+            - '%orynider.pafiledb.table.pa_files%'
+            - '%orynider.pafiledb.table.pa_cat%'
+            - '%orynider.pafiledb.table.pa_config%' 
+            - '%orynider.pafiledb.table.pa_votes%'
+            - '%orynider.pafiledb.table.pa_comments%'
+            - '%orynider.pafiledb.table.pa_license%'
+            - '%orynider.pafiledb.table.pa_auth_access%'		
     orynider.pafiledb.core.pafiledb_public:
-        class: orynider\pafiledb\core\pafiledb_public
+        class: orynider\pafiledb\core\pafiledb_public		
         arguments:
             - '@orynider.pafiledb.core.pafiledb'
             - '@template'	
@@ -206,7 +258,8 @@ services:
             - '%orynider.pafiledb.table.pa_votes%'
             - '%orynider.pafiledb.table.pa_comments%'
             - '%orynider.pafiledb.table.pa_license%'
-            - '%orynider.pafiledb.table.pa_auth_access%'			
+            - '%orynider.pafiledb.table.pa_auth_access%'
+            - '%orynider.pafiledb.table.pa_mirrors%'			
     orynider.pafiledb.core.pafiledb_functions:
         class: orynider\pafiledb\core\pafiledb_functions
         arguments:
@@ -216,7 +269,7 @@ services:
             - '@controller.helper'
             - '@request'
             - '@auth'			
-            - '@cache.driver'
+            - '@cache'
             - '@orynider.pafiledb.core.pafiledb'			
             - '@orynider.pafiledb.core.pafiledb_cache'
             - '@orynider.pafiledb.core.pafiledb_templates'			

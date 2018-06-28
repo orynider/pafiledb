@@ -89,7 +89,7 @@ class listener implements EventSubscriberInterface
 	{
 		$this->template->assign_vars(array(
 			'U_PA_FILES'				=> $this->helper->route('orynider_pafiledb_controller'),
-			'U_PA_FILES_UPLOAD'			=> $this->helper->route('orynider_pafiledb_controller_upload'),
+			'U_PA_FILES_UPLOAD'			=> $this->helper->route('orynider_pafiledb_controller_user_upload'),
 			'U_PA_FILES_FILE'			=> $this->helper->route('orynider_pafiledb_controller_file'),			
 			'PA_FILES_USE_UPLOAD'		=> $this->auth->acl_get('u_pa_files_upload'),			
 			'S_FILES_EXIST'				=> true,
@@ -115,7 +115,7 @@ class listener implements EventSubscriberInterface
 		if (strrpos($event['row']['session_page'], 'app.' . $this->php_ext . '/upload') === 0)
 		{
 			$event['location'] = $this->user->lang('FILES_UPLOAD_SECTION');
-			$event['location_url'] = $this->helper->route('orynider_pafiledb_controller_upload', array('name' => 'index'));
+			$event['location_url'] = $this->helper->route('orynider_pafiledb_controller_user_upload', array('name' => 'index'));
 		}
 	}
 	

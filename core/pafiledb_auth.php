@@ -90,7 +90,7 @@ class pafiledb_auth
 	/**
 	* Constructor
 	*
-	* @param \orynider\pafiledb\core\functions						$functions
+	* @param \orynider\pafiledb\core\functions					$functions
 	* @param \phpbb\template\template		 					$template
 	* @param \phpbb\user									$user		
 	* @param \phpbb\db\driver\driver_interface					$db
@@ -113,15 +113,17 @@ class pafiledb_auth
 		$this->user 				= $user;
 		$this->db 					= $db;
 		$this->request 				= $request;
-		$this->auth 				= $auth;		
+		$this->auth 				= $auth;
+		$this->auth_access_table 	= $pa_auth_access_table;		
 		$this->pa_auth_access_table = $pa_auth_access_table;
-		// Read out config values
-		$this->pafiledb_config 		= $functions->config_values();
+
 		$this->is_admin 			= $auth->acl_get('a_') ? true : 0;
 		
 		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
 		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
-				
+		
+		// Read out config values		
+		$this->pafiledb_config = $this->functions->config_values();				
 	}
 	
 	public function pafiledb_auth(
@@ -140,13 +142,15 @@ class pafiledb_auth
 		$this->request 				= $request;
 		$this->auth 				= $auth;		
 		$this->pa_auth_access_table = PA_AUTH_ACCESS_TABLE;
+		
 		// Read out config values
 		$this->pafiledb_config 		= $functions->config_values();
 		$this->is_admin 			= $auth->acl_get('a_') ? true : 0;
 
 		$this->auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
 		$this->auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
-				
+		
+		//$this->pafiledb_config = $this->functions->config_values();		
 	}	
 	
 	/**
@@ -160,12 +164,12 @@ class pafiledb_auth
 	function auth($c_access, $ug_auth_mode = '')
 	{
 		// Read out config values
-		$pafiledb_config = $this->config_values();
+		$pafiledb_config = $this->pafiledb_config;
 		
 		$a_sql = 'a.auth_view, a.auth_read, a.auth_view_file, a.auth_edit_file, a.auth_delete_file, a.auth_upload, a.auth_download, a.auth_rate, a.auth_email, a.auth_view_comment, a.auth_post_comment, a.auth_edit_comment, a.auth_delete_comment, a.auth_mod, a.auth_search, a.auth_stats, a.auth_toplist, a.auth_viewall, a.auth_approval, a.auth_approval_edit';
 		$auth_fields = array( 'auth_view', 'auth_read', 'auth_view_file', 'auth_edit_file', 'auth_delete_file', 'auth_upload', 'auth_download', 'auth_rate', 'auth_email', 'auth_view_comment', 'auth_post_comment', 'auth_edit_comment', 'auth_delete_comment', 'auth_approval', 'auth_approval_edit' );
 		$auth_fields_global = array( 'auth_search', 'auth_stats', 'auth_toplist', 'auth_viewall' );
-
+		
 		// If the user isn't logged on then all we need do is check if the forum
 		// has the type set to ALL, if yes they are good to go, if not then they
 		// are denied access
@@ -178,9 +182,9 @@ class pafiledb_auth
 				WHERE ug.user_id =" . (int) $this->user->data['user_id'] . "
 					AND ug.user_pending = 0
 					AND a.group_id = ug.group_id";		
-			if ( !($result = $this->db->sql_query($sql)) )
+			if ( (!$result = $this->db->sql_query($sql)) )
 			{
-				$this->functions->message_die( GENERAL_ERROR, 'Failed obtaining category access control lists', '', __LINE__, __FILE__, $sql );
+				$this->message_die( GENERAL_ERROR, 'Failed obtaining category access control lists', '', __LINE__, __FILE__, $sql );
 			}
 
 			while ($row = $this->db->sql_fetchrow($result))
@@ -194,11 +198,11 @@ class pafiledb_auth
 					$global_u_access = $row;
 				}				
 			}
+			//print_r($row);
 		}
 		
 		//$is_admin = ($this->user->data['user_level'] == ADMIN && $this->user->data['user_id'] !== 1) ? true : 0;
-		$is_admin = $this->auth->acl_get('a_') ? true : 0;
-		//print_r($is_admin);
+		//$is_admin = $this->auth->acl_get('a_') ? true : 0;
 		for( $i = 0; $i < $fields = count($auth_fields); $i++ )
 		{
 			$key = $this->auth_fields[$i];
@@ -241,7 +245,7 @@ class pafiledb_auth
 					break;
 
 					case AUTH_ADMIN:
-						$auth_user[$c_cat_id][$key] = $is_admin;
+						$auth_user[$c_cat_id][$key] = $this->is_admin;
 						$auth_user[$c_cat_id][$key . '_type'] = $this->user->lang['Auth_Administrators'];
 					break;
 
@@ -263,7 +267,7 @@ class pafiledb_auth
 		
 		$this->auth_user = $auth_user;
 		
-		for( $i = 0; $i < count($auth_fields_global); $i++ )
+		for( $i = 0; $i < $filds = count($auth_fields_global); $i++ )
 		{
 			$key = $auth_fields_global[$i];
 			$value = $pafiledb_config[$auth_fields_global[$i]];
