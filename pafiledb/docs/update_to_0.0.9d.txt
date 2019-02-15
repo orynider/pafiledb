@@ -1,0 +1,17 @@
+if you have the version 0.0.9c you don't have to run the pafiledb_installer.php
+
+Upload all new files, and run the installer from its location at 
+pafiledb/docs/pafiledb_installer.php choose to update your version
+
+don't forget to see the new structure for the folders
+
+and you need to chmod the following
+
+## Create and CHMOD (0777) THE FOLLOWING DIRECTORIES:
+## - pafiledb/uploads/
+## - pafiledb/cache/
+## - pafiledb/cache/templates/subSilver/
+## - pafiledb/cache/templates/subSilver/admin
+## - pafiledb/images/screenshots/
+
+clear the directory pafiledb/cache/ from all the files but don't delete the folders on it
